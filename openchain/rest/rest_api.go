@@ -30,6 +30,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -42,6 +43,7 @@ import (
 	"github.com/openblockchain/obc-peer/openchain/chaincode"
 	"github.com/openblockchain/obc-peer/openchain/crypto"
 	"github.com/openblockchain/obc-peer/openchain/crypto/utils"
+	"github.com/openblockchain/obc-peer/openchain/ledger"
 	pb "github.com/openblockchain/obc-peer/protos"
 )
 
@@ -424,10 +426,30 @@ func (s *ServerOpenchainREST) GetBlockByNumber(rw web.ResponseWriter, req *web.R
 	}
 }
 
+func (s *ServerOpenchainREST) maybeWait(uuid string, req *web.Request) {
+	if timeout, ok := req.URL.Query()["wait"]; ok {
+		timeoutStr := ""
+		if len(timeout) > 0 {
+			timeoutStr = timeout[0]
+		}
+		timeout, err := time.ParseDuration(timeoutStr)
+		if err != nil {
+			timeout = 5 * time.Second
+		}
+		w := ledger.TransactionWaiter(uuid)
+		select {
+		case <-w:
+		case <-time.After(timeout):
+		}
+	}
+}
+
 // GetTransactionByUUID returns a transaction matching the specified UUID
 func (s *ServerOpenchainREST) GetTransactionByUUID(rw web.ResponseWriter, req *web.Request) {
 	// Parse out the transaction UUID
 	txUUID := req.PathParams["uuid"]
+
+	s.maybeWait(txUUID, req)
 
 	// Retrieve the transaction matching the UUID
 	tx, err := s.server.GetTransactionByUUID(context.Background(), txUUID)
@@ -716,11 +738,13 @@ func (s *ServerOpenchainREST) Invoke(rw web.ResponseWriter, req *web.Request) {
 	}
 
 	// Clients will need the txuuid in order to track it after invocation
-	txuuid := resp.Msg
+	txuuid := string(resp.Msg)
+
+	s.maybeWait(txuuid, req)
 
 	rw.WriteHeader(http.StatusOK)
-	fmt.Fprintf(rw, "{\"OK\": \"Successfully invoked chainCode.\",\"message\": \"%s\"}", string(txuuid))
-	restLogger.Info("Successfuly invoked chainCode with txuuid (%s)\n", string(txuuid))
+	fmt.Fprintf(rw, "{\"OK\": \"Successfully invoked chainCode.\",\"message\": \"%s\"}", txuuid)
+	restLogger.Info("Successfuly invoked chainCode with txuuid (%s)\n", txuuid)
 }
 
 // Query performs the requested query on the target Chaincode.
