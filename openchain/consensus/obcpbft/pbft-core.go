@@ -26,7 +26,6 @@ import (
 	"sync"
 	"time"
 
-	_ "github.com/openblockchain/obc-peer/openchain" // Needed for logging format init
 	"github.com/openblockchain/obc-peer/openchain/consensus"
 	"github.com/openblockchain/obc-peer/openchain/consensus/statetransfer"
 	"github.com/openblockchain/obc-peer/openchain/util"

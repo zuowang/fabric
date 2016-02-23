@@ -114,6 +114,7 @@ service Peer {
     // Accepts a stream of OpenchainMessage during chat session, while receiving
     // other OpenchainMessage (e.g. from other peers).
     rpc Chat(stream OpenchainMessage) returns (stream OpenchainMessage) {}
+    rpc Transact(Transaction) returns (Response) {}
 }
 message PeerAddress {
     string host = 1;

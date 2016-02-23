@@ -563,6 +563,7 @@ type PeerClient interface {
 	// Accepts a stream of OpenchainMessage during chat session, while receiving
 	// other OpenchainMessage (e.g. from other peers).
 	Chat(ctx context.Context, opts ...grpc.CallOption) (Peer_ChatClient, error)
+	Transact(ctx context.Context, in *Transaction, opts ...grpc.CallOption) (*Response, error)
 }
 
 type peerClient struct {
@@ -604,12 +605,22 @@ func (x *peerChatClient) Recv() (*OpenchainMessage, error) {
 	return m, nil
 }
 
+func (c *peerClient) Transact(ctx context.Context, in *Transaction, opts ...grpc.CallOption) (*Response, error) {
+	out := new(Response)
+	err := grpc.Invoke(ctx, "/protos.Peer/Transact", in, out, c.cc, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Server API for Peer service
 
 type PeerServer interface {
 	// Accepts a stream of OpenchainMessage during chat session, while receiving
 	// other OpenchainMessage (e.g. from other peers).
 	Chat(Peer_ChatServer) error
+	Transact(context.Context, *Transaction) (*Response, error)
 }
 
 func RegisterPeerServer(s *grpc.Server, srv PeerServer) {
@@ -642,10 +653,27 @@ func (x *peerChatServer) Recv() (*OpenchainMessage, error) {
 	return m, nil
 }
 
+func _Peer_Transact_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error) (interface{}, error) {
+	in := new(Transaction)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	out, err := srv.(PeerServer).Transact(ctx, in)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 var _Peer_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "protos.Peer",
 	HandlerType: (*PeerServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "Transact",
+			Handler:    _Peer_Transact_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "Chat",

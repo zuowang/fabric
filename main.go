@@ -46,6 +46,7 @@ import (
 	"github.com/openblockchain/obc-peer/events/producer"
 	"github.com/openblockchain/obc-peer/openchain"
 	"github.com/openblockchain/obc-peer/openchain/chaincode"
+	"github.com/openblockchain/obc-peer/openchain/consensus"
 	"github.com/openblockchain/obc-peer/openchain/consensus/helper"
 	"github.com/openblockchain/obc-peer/openchain/crypto"
 	"github.com/openblockchain/obc-peer/openchain/ledger/genesis"
@@ -326,6 +327,14 @@ func serve(args []string) error {
 	logger.Info("Security enabled status: %t", viper.GetBool("security.enabled"))
 	logger.Info("Privacy enabled status: %t", viper.GetBool("security.privacy"))
 
+	// Deploy the genesis block if needed.
+	if viper.GetBool("peer.validator.enabled") {
+		makeGenesisError := genesis.MakeGenesis()
+		if makeGenesisError != nil {
+			return makeGenesisError
+		}
+	}
+
 	var opts []grpc.ServerOption
 	if viper.GetBool("peer.tls.enabled") {
 		creds, err := credentials.NewServerTLSFromFile(viper.GetString("peer.tls.cert.file"), viper.GetString("peer.tls.key.file"))
@@ -341,10 +350,10 @@ func serve(args []string) error {
 
 	if viper.GetBool("peer.validator.enabled") {
 		logger.Debug("Running as validating peer - installing consensus %s", viper.GetString("peer.validator.consensus"))
-		peerServer, err = peer.NewPeerWithHandler(helper.NewConsensusHandler)
+		peerServer, err = peer.NewPeerWithHandler(helper.NewConsensusHandler, helper.NewConsenter)
 	} else {
 		logger.Debug("Running as non-validating peer")
-		peerServer, err = peer.NewPeerWithHandler(peer.NewPeerHandler)
+		peerServer, err = peer.NewPeerWithHandler(peer.NewPeerHandler, func(p peer.MessageHandlerCoordinator) (consensus.Consenter, error) { return nil, nil })
 	}
 
 	if err != nil {
@@ -411,14 +420,6 @@ func serve(args []string) error {
 		}
 		serve <- grpcErr
 	}()
-
-	// Deploy the genesis block if needed.
-	if viper.GetBool("peer.validator.enabled") {
-		makeGenesisError := genesis.MakeGenesis()
-		if makeGenesisError != nil {
-			return makeGenesisError
-		}
-	}
 
 	//start the event hub server
 	if ehubGrpcServer != nil && ehubLis != nil {

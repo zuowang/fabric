@@ -67,6 +67,10 @@ func NewConsensusHandler(coord peer.MessageHandlerCoordinator,
 	return handler, nil
 }
 
+func NewConsenter(coord peer.MessageHandlerCoordinator) (consensus.Consenter, error) {
+	return controller.NewConsenter(NewHelper(coord)), nil
+}
+
 // HandleMessage handles the incoming Openchain messages for the Peer
 func (handler *ConsensusHandler) HandleMessage(msg *pb.OpenchainMessage) error {
 	if msg.Type == pb.OpenchainMessage_CONSENSUS {

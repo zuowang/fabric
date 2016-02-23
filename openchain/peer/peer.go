@@ -37,6 +37,8 @@ import (
 	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 
+	"github.com/openblockchain/obc-peer/openchain/chaincode"
+	"github.com/openblockchain/obc-peer/openchain/consensus"
 	"github.com/openblockchain/obc-peer/openchain/crypto"
 	"github.com/openblockchain/obc-peer/openchain/ledger"
 	"github.com/openblockchain/obc-peer/openchain/ledger/statemgmt"
@@ -103,7 +105,7 @@ type MessageHandlerCoordinator interface {
 	GetPeers() (*pb.PeersMessage, error)
 	GetRemoteLedger(receiver *pb.PeerID) (RemoteLedger, error)
 	PeersDiscovered(*pb.PeersMessage) error
-	ExecuteTransaction(transaction *pb.Transaction) *pb.Response
+	ExecuteTransaction(ctx context.Context, transaction *pb.Transaction) *pb.Response
 }
 
 // ChatStream interface supported by stream between Peers
@@ -218,16 +220,20 @@ type handlerMap struct {
 
 type HandlerFactory func(MessageHandlerCoordinator, ChatStream, bool, MessageHandler) (MessageHandler, error)
 
+type ConsensusFactory func(MessageHandlerCoordinator) (consensus.Consenter, error)
+
 // PeerImpl implementation of the Peer service
 type PeerImpl struct {
 	handlerFactory HandlerFactory
 	handlerMap     *handlerMap
 	ledgerWrapper  *ledgerWrapper
 	secHelper      crypto.Peer
+	consenter      consensus.Consenter
+	serverClient   pb.PeerClient
 }
 
 // NewPeerWithHandler returns a Peer which uses the supplied handler factory function for creating new handlers on new Chat service invocations.
-func NewPeerWithHandler(handlerFact HandlerFactory) (*PeerImpl, error) {
+func NewPeerWithHandler(handlerFact HandlerFactory, consenterFact ConsensusFactory) (*PeerImpl, error) {
 	peer := new(PeerImpl)
 	if handlerFact == nil {
 		return nil, errors.New("Cannot supply nil handler factory")
@@ -268,6 +274,19 @@ func NewPeerWithHandler(handlerFact HandlerFactory) (*PeerImpl, error) {
 		return nil, fmt.Errorf("Error constructing NewPeerWithHandler: %s", err)
 	}
 	peer.ledgerWrapper = &ledgerWrapper{ledger: ledgerPtr}
+
+	peer.consenter, err = consenterFact(peer)
+	if err != nil {
+		return nil, fmt.Errorf("Error constructing NewPeerWithHandler: %s", err)
+	}
+
+	peerAddress := getValidatorStreamAddress()
+	conn, err := NewPeerClientConnectionWithAddress(peerAddress)
+	if err != nil {
+		return nil, fmt.Errorf("Error constructing NewPeerWithHandler: %s", err)
+	}
+	peer.serverClient = pb.NewPeerClient(conn)
+
 	go peer.chatWithPeer(viper.GetString("peer.discovery.rootnode"))
 	return peer, nil
 }
@@ -275,6 +294,44 @@ func NewPeerWithHandler(handlerFact HandlerFactory) (*PeerImpl, error) {
 // Chat implementation of the the Chat bidi streaming RPC function
 func (p *PeerImpl) Chat(stream pb.Peer_ChatServer) error {
 	return p.handleChat(stream.Context(), stream, false)
+}
+
+// Invoke RPC
+func (p *PeerImpl) Transact(ctx context.Context, tx *pb.Transaction) (response *pb.Response, err error) {
+	// Verify transaction signature if security is enabled
+	secHelper := p.GetSecHelper()
+	if secHelper != nil {
+		peerLogger.Debug("Verifying transaction signature %s", tx.Uuid)
+		if tx, err = secHelper.TransactionPreValidation(tx); nil != err {
+			response = &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(err.Error())}
+			peerLogger.Debug("Failed to verify transaction %v", err)
+			return response, nil
+		}
+	}
+
+	if tx.Type == pb.Transaction_CHAINCODE_QUERY {
+		result, err := chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), tx)
+		if err != nil {
+			response = &pb.Response{Status: pb.Response_FAILURE,
+				Msg: []byte(fmt.Sprintf("Error:%s", err))}
+		} else {
+			response = &pb.Response{Status: pb.Response_SUCCESS, Msg: result}
+		}
+	} else {
+		selfPE, _ := p.GetPeerEndpoint() // we are the validator introducting this tx into the system
+		txRaw, _ := proto.Marshal(tx)
+		err = p.consenter.RecvMsg(&pb.OpenchainMessage{
+			Type:    pb.OpenchainMessage_CHAIN_TRANSACTION,
+			Payload: txRaw,
+		}, selfPE.ID)
+		if err != nil {
+			response = &pb.Response{Status: pb.Response_FAILURE, Msg: []byte(fmt.Sprintf("Error:%s", err))}
+			return response, nil
+		}
+		response = &pb.Response{Status: pb.Response_SUCCESS, Msg: []byte(tx.Uuid)}
+	}
+
+	return response, nil
 }
 
 // GetPeers returns the currently registered PeerEndpoints
@@ -653,16 +710,14 @@ func getValidatorStreamAddress() string {
 }
 
 //ExecuteTransaction executes transactions decides to do execute in dev or prod mode
-func (p *PeerImpl) ExecuteTransaction(transaction *pb.Transaction) *pb.Response {
-	peerAddress := getValidatorStreamAddress()
-	var response *pb.Response
-	if viper.GetBool("peer.validator.enabled") { // send gRPC request to yourself
-		response = sendTransactionsToThisPeer(peerAddress, transaction)
-
-	} else {
-		response = p.SendTransactionsToPeer(peerAddress, transaction)
+func (p *PeerImpl) ExecuteTransaction(ctx context.Context, transaction *pb.Transaction) *pb.Response {
+	response, err := p.serverClient.Transact(ctx, transaction)
+	if err != nil {
+		return &pb.Response{
+			Status: pb.Response_FAILURE,
+			Msg:    []byte(fmt.Sprintf("Error: %s", err)),
+		}
 	}
-
 	return response
 }
 
