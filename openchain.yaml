@@ -118,6 +118,9 @@ peer:
     gomaxprocs: 2
     workers: 2
 
+    # Address to expose the profiler on.  Profiler is disable if not set.
+    profile: :6060
+
     # Sync related configuration
     sync:
         blocks:

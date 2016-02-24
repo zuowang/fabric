@@ -31,6 +31,9 @@ import (
 	"strings"
 	"time"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	"golang.org/x/net/context"
 
 	google_protobuf "google/protobuf"
@@ -286,6 +289,10 @@ func createEventHubServer() (net.Listener, *grpc.Server, error) {
 }
 
 func serve(args []string) error {
+	if prof := viper.GetString("peer.profile"); prof != "" {
+		go http.ListenAndServe(prof, nil)
+	}
+
 	peerEndpoint, err := peer.GetPeerEndpoint()
 	if err != nil {
 		err = fmt.Errorf("Failed to get Peer Endpoint: %s", err)
