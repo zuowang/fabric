@@ -44,12 +44,14 @@ var devopsLogger = logging.MustGetLogger("devops")
 func NewDevopsServer(coord peer.MessageHandlerCoordinator) *Devops {
 	d := new(Devops)
 	d.coord = coord
+	d.securityEnabled = viper.GetBool("security.enabled")
 	return d
 }
 
 // Devops implementation of Devops services
 type Devops struct {
-	coord peer.MessageHandlerCoordinator
+	coord           peer.MessageHandlerCoordinator
+	securityEnabled bool
 }
 
 // Login establishes the security context with the Devops service
@@ -127,10 +129,8 @@ func (d *Devops) Deploy(ctx context.Context, spec *pb.ChaincodeSpec) (*pb.Chainc
 	var tx *pb.Transaction
 	var sec crypto.Client
 
-	if viper.GetBool("security.enabled") {
-		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debug("Initializing secure devops using context %s", spec.SecureContext)
-		}
+	if d.securityEnabled {
+		devopsLogger.Debug("Initializing secure devops using context %s", spec.SecureContext)
 		sec, err = crypto.InitClient(spec.SecureContext, nil)
 		defer crypto.CloseClient(sec)
 
@@ -141,26 +141,20 @@ func (d *Devops) Deploy(ctx context.Context, spec *pb.ChaincodeSpec) (*pb.Chainc
 			return nil, err
 		}
 
-		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debug("Creating secure transaction %s", transID)
-		}
+		devopsLogger.Debug("Creating secure transaction %s", transID)
 		tx, err = sec.NewChaincodeDeployTransaction(chaincodeDeploymentSpec, transID)
 		if nil != err {
 			return nil, err
 		}
 	} else {
-		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debug("Creating deployment transaction (%s)", transID)
-		}
+		devopsLogger.Debug("Creating deployment transaction (%s)", transID)
 		tx, err = pb.NewChaincodeDeployTransaction(chaincodeDeploymentSpec, transID)
 		if err != nil {
 			return nil, fmt.Errorf("Error deploying chaincode: %s ", err)
 		}
 	}
 
-	if devopsLogger.IsEnabledFor(logging.DEBUG) {
-		devopsLogger.Debug("Sending deploy transaction (%s) to validator", tx.Uuid)
-	}
+	devopsLogger.Debug("Sending deploy transaction (%s) to validator", tx.Uuid)
 	resp := d.coord.ExecuteTransaction(ctx, tx)
 	if resp.Status == pb.Response_FAILURE {
 		err = fmt.Errorf(string(resp.Msg))
@@ -180,10 +174,8 @@ func (d *Devops) invokeOrQuery(ctx context.Context, chaincodeInvocationSpec *pb.
 	var transaction *pb.Transaction
 	var err error
 	var sec crypto.Client
-	if viper.GetBool("security.enabled") {
-		if devopsLogger.IsEnabledFor(logging.DEBUG) {
-			devopsLogger.Debug("Initializing secure devops using context %s", chaincodeInvocationSpec.ChaincodeSpec.SecureContext)
-		}
+	if d.securityEnabled {
+		devopsLogger.Debug("Initializing secure devops using context %s", chaincodeInvocationSpec.ChaincodeSpec.SecureContext)
 		sec, err = crypto.InitClient(chaincodeInvocationSpec.ChaincodeSpec.SecureContext, nil)
 		defer crypto.CloseClient(sec)
 		// remove the security context since we are no longer need it down stream
@@ -196,9 +188,7 @@ func (d *Devops) invokeOrQuery(ctx context.Context, chaincodeInvocationSpec *pb.
 	if err != nil {
 		return nil, err
 	}
-	if devopsLogger.IsEnabledFor(logging.DEBUG) {
-		devopsLogger.Debug("Sending invocation transaction (%s) to validator", transaction.Uuid)
-	}
+	devopsLogger.Debug("Sending invocation transaction (%s) to validator", transaction.Uuid)
 	resp := d.coord.ExecuteTransaction(ctx, transaction)
 	if resp.Status == pb.Response_FAILURE {
 		err = fmt.Errorf(string(resp.Msg))
