@@ -72,6 +72,7 @@ func Start(cc Chaincode) error {
 
 	flag.Parse()
 
+	logging.SetLevel(logging.INFO, "")
 	chaincodeLogger.Debug("Peer address: %s", getPeerAddress())
 
 	// Establish connection with validating peer
