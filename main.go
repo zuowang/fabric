@@ -26,7 +26,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -191,8 +190,6 @@ var chaincodeQueryCmd = &cobra.Command{
 }
 
 func main() {
-	runtime.GOMAXPROCS(2)
-
 	// For environment variables.
 	viper.SetEnvPrefix(cmdRoot)
 	viper.AutomaticEnv()
