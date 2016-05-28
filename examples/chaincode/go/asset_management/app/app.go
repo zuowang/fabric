@@ -32,6 +32,10 @@ var (
 
 	dave     crypto.Client
 	daveCert crypto.CertificateHandler
+
+	// Joe is broker
+	joe     crypto.Client
+	joeCert crypto.CertificateHandler
 )
 
 func deploy() (err error) {
@@ -131,23 +135,87 @@ func assignOwnership() (err error) {
 	return
 }
 
-func transferOwnership() (err error) {
+func assignBroker() (err error) {
+	appLogger.Debug("------------- charlie wants to assign broker of 'Picasso' to Joe...")
+
+	// 1. Charlie is the owner of 'Picasso';
+	// 2. Charlie wants to assign broker of 'Picasso' to Joe;
+	// 3. Charlie obtains, via an out-of-band channel, a TCert of Joe, let us call this certificate *JoeCert*;
+	joeCert, err = joe.GetTCertificateHandlerNext()
+	if err != nil {
+		appLogger.Error("Failed getting Joe TCert [%s]", err)
+		return
+	}
+
+	// 4. Charlie constructs an execute transaction, as described in *application-ACL.md*, to invoke the *assignBroker*
+	// function passing as parameters *('Picasso', DER(JoeCert))*.
+	// 5. Charlie submits the transaction to the fabric network.
+	resp, err := assignBrokerInternal(charlie, charlieCert, "Picasso", joeCert)
+	if err != nil {
+		appLogger.Error("Failed assigning broker [%s]", err)
+		return
+	}
+	appLogger.Debug("Resp [%s]", resp.String())
+
+	appLogger.Debug("Wait 30 seconds")
+	time.Sleep(30 * time.Second)
+
+	// Check the owner of 'Picasso". It should be joe
+	appLogger.Debug("Query....")
+	queryTx, theBrokerIs, err := whoIsTheBroker(charlie, "Picasso")
+	if err != nil {
+		return
+	}
+	appLogger.Debug("Resp [%s]", theBrokerIs.String())
+	appLogger.Debug("Query....done")
+
+	var res []byte
+	if confidentialityOn {
+		// Decrypt result
+		res, err = charlie.DecryptQueryResult(queryTx, theBrokerIs.Msg)
+		if err != nil {
+			appLogger.Error("Failed decrypting result [%s]", err)
+			return
+		}
+	} else {
+		res = theBrokerIs.Msg
+	}
+
+	if !reflect.DeepEqual(res, joeCert.GetCertificate()) {
+		appLogger.Error("Joe is not the broker.")
+
+		appLogger.Debug("Query result  : [% x]", res)
+		appLogger.Debug("Joe's cert: [% x]", joeCert.GetCertificate())
+
+		return fmt.Errorf("Charlie is not the owner.")
+	}
+	appLogger.Debug("Joe is the broker!")
+
+	appLogger.Debug("Wait 30 seconds...")
+	time.Sleep(30 * time.Second)
+
+	appLogger.Debug("------------- Done!")
+	return
+}
+
+func preTransferOwnership() (err error) {
 	appLogger.Debug("------------- Charlie wants to transfer the ownership of 'Picasso' to Dave...")
 
 	// 1. Charlie is the owner of 'Picasso';
-	// 2. Charlie wants to transfer the ownership of 'Picasso' to Dave;
-	// 3. Charlie obtains, via an out-of-band channel, a TCert of Dave, let us call this certificate *DaveCert*;
+	// 2. Joe is the broker of 'Picasso';
+	// 3. Charlie wants to transfer the ownership of 'Picasso' to Dave;
+	// 5. Charlie obtains, via an out-of-band channel, a TCert of Dave, let us call this certificate *DaveCert*;
 	daveCert, err = dave.GetTCertificateHandlerNext()
 	if err != nil {
 		appLogger.Error("Failed getting Dave TCert [%s]", err)
 		return
 	}
 
-	// 4. Charlie constructs an execute transaction, as described in *application-ACL.md*, to invoke the *transfer*
+	// 4. Joe constructs an execute transaction, as described in *application-ACL.md*, to invoke the *transfer*
 	// function passing as parameters *('Picasso', DER(DaveCert))*.
-	// 5. Charlie submits the transaction to the fabric network.
+	// 5. Joe submits the transaction to the fabric network.
 
-	resp, err := transferOwnershipInternal(charlie, charlieCert, "Picasso", daveCert)
+	resp, err := preTransferOwnershipInternal(charlie, charlieCert, "Picasso", daveCert)
 	if err != nil {
 		return
 	}
@@ -157,7 +225,7 @@ func transferOwnership() (err error) {
 	time.Sleep(30 * time.Second)
 
 	appLogger.Debug("Query....")
-	queryTx, theOwnerIs, err := whoIsTheOwner(charlie, "Picasso")
+	queryTx, theOwnerIs, err := whoIsTheOwner(joe, "Picasso")
 	if err != nil {
 		return
 	}
@@ -167,7 +235,58 @@ func transferOwnership() (err error) {
 	var res []byte
 	if confidentialityOn {
 		// Decrypt result
-		res, err = charlie.DecryptQueryResult(queryTx, theOwnerIs.Msg)
+		res, err = joe.DecryptQueryResult(queryTx, theOwnerIs.Msg)
+		if err != nil {
+			appLogger.Error("Failed decrypting result [%s]", err)
+			return
+		}
+	} else {
+		res = theOwnerIs.Msg
+	}
+
+	if !reflect.DeepEqual(res, daveCert.GetCertificate()) {
+		appLogger.Error("Dave is not the owner.")
+
+		appLogger.Debug("Query result  : [% x]", res)
+		appLogger.Debug("Dave's cert: [% x]", daveCert.GetCertificate())
+
+		return fmt.Errorf("Dave is not the owner.")
+	}
+
+	appLogger.Debug("-------------Pre Tranfer Done!")
+	return
+}
+
+func transferOwnership() (err error) {
+	appLogger.Debug("------------- Joe transfer the ownership of 'Picasso' to Dave...")
+
+	// 1. Joe is the broker of 'Picasso';
+	// 2. Joe transfer the ownership of 'Picasso' to Dave, as required by Charlie;
+	// 3. Joe constructs an execute transaction, as described in *application-ACL.md*, to invoke the *transfer*
+	// function passing as parameters *('Picasso')*.
+	// 4. Joe submits the transaction to the fabric network.
+
+	resp, err := transferOwnershipInternal(joe, joeCert, "Picasso")
+	if err != nil {
+		return
+	}
+	appLogger.Debug("Resp [%s]", resp.String())
+
+	appLogger.Debug("Wait 30 seconds")
+	time.Sleep(30 * time.Second)
+
+	appLogger.Debug("Query....")
+	queryTx, theOwnerIs, err := whoIsTheOwner(joe, "Picasso")
+	if err != nil {
+		return
+	}
+	appLogger.Debug("Resp [%s]", theOwnerIs.String())
+	appLogger.Debug("Query....done")
+
+	var res []byte
+	if confidentialityOn {
+		// Decrypt result
+		res, err = joe.DecryptQueryResult(queryTx, theOwnerIs.Msg)
 		if err != nil {
 			appLogger.Error("Failed decrypting result [%s]", err)
 			return
@@ -201,6 +320,20 @@ func testAssetManagementChaincode() (err error) {
 	err = assignOwnership()
 	if err != nil {
 		appLogger.Error("Failed assigning ownership [%s]", err)
+		return
+	}
+
+	// Assign broker
+	err = assignBroker()
+	if err != nil {
+		appLogger.Error("Failed assigning broker [%s]", err)
+		return
+	}
+
+	// Pre Transfer
+	err = preTransferOwnership()
+	if err != nil {
+		appLogger.Error("Failed pre transfering ownership [%s]", err)
 		return
 	}
 

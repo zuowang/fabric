@@ -111,8 +111,71 @@ func (t *AssetManagementChaincode) assign(stub *shim.ChaincodeStub, args []strin
 	return nil, err
 }
 
-func (t *AssetManagementChaincode) transfer(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-	myLogger.Debug("Transfer...")
+func (t *AssetManagementChaincode) assignBroker(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+	myLogger.Debug("Assign Broker...")
+
+	if len(args) != 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 2")
+	}
+
+	asset := args[0]
+	broker := []byte(args[1])
+
+	// Verify the identity of the caller
+	// Only the owner can assign broker of his assets
+	var columns []shim.Column
+	col1 := shim.Column{Value: &shim.Column_String_{String_: asset}}
+	columns = append(columns, col1)
+
+	row, err := stub.GetRow("AssetsOwnership", columns)
+	if err != nil {
+		return nil, fmt.Errorf("Failed retrieving asset [%s]: [%s]", asset, err)
+	}
+
+	owner := row.Columns[1].GetBytes()
+	myLogger.Debug("Previous owener of [%s] is [% x]", asset, owner)
+	if len(owner) == 0 {
+		return nil, fmt.Errorf("Invalid previous owner. Nil")
+	}
+
+	// Verify ownership
+	ok, err := t.isCaller(stub, owner)
+	if err != nil {
+		return nil, errors.New("Failed checking asset owner identity")
+	}
+	if !ok {
+		return nil, errors.New("The caller is not the owner of the asset")
+	}
+
+	// At this point, the proof of ownership is valid, then register transfer
+	err = stub.DeleteRow(
+		"AssetsOwnership",
+		[]shim.Column{shim.Column{Value: &shim.Column_String_{String_: asset}}},
+	)
+	if err != nil {
+		return nil, errors.New("Failed deliting row.")
+	}
+
+	_, err = stub.InsertRow(
+		"AssetsOwnership",
+		shim.Row{
+			Columns: []*shim.Column{
+				&shim.Column{Value: &shim.Column_String_{String_: asset}},
+				&shim.Column{Value: &shim.Column_Bytes{Bytes: owner}},
+				&shim.Column{Value: &shim.Column_Bytes{Bytes: broker}},
+			},
+		})
+	if err != nil {
+		return nil, errors.New("Failed inserting row.")
+	}
+
+	myLogger.Debug("Assign Broker...done")
+
+	return nil, nil
+}
+
+func (t *AssetManagementChaincode) preTransfer(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+	myLogger.Debug("Pre Transfer...")
 
 	if len(args) != 2 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 2")
@@ -138,6 +201,12 @@ func (t *AssetManagementChaincode) transfer(stub *shim.ChaincodeStub, args []str
 		return nil, fmt.Errorf("Invalid previous owner. Nil")
 	}
 
+	broker := row.Columns[1].GetBytes()
+	myLogger.Debug("Broker of [%s] is [% x]", asset, broker)
+	if len(broker) == 0 {
+		return nil, fmt.Errorf("Invalid broker. Nil")
+	}
+
 	// Verify ownership
 	ok, err := t.isCaller(stub, prvOwner)
 	if err != nil {
@@ -145,6 +214,75 @@ func (t *AssetManagementChaincode) transfer(stub *shim.ChaincodeStub, args []str
 	}
 	if !ok {
 		return nil, errors.New("The caller is not the owner of the asset")
+	}
+
+	// At this point, the proof of ownership is valid, then register transfer
+	err = stub.DeleteRow(
+		"AssetsOwnership",
+		[]shim.Column{shim.Column{Value: &shim.Column_String_{String_: asset}}},
+	)
+	if err != nil {
+		return nil, errors.New("Failed deliting row.")
+	}
+
+	_, err = stub.InsertRow(
+		"AssetsOwnership",
+		shim.Row{
+			Columns: []*shim.Column{
+				&shim.Column{Value: &shim.Column_String_{String_: asset}},
+				&shim.Column{Value: &shim.Column_Bytes{Bytes: prvOwner}},
+				&shim.Column{Value: &shim.Column_Bytes{Bytes: broker}},
+				&shim.Column{Value: &shim.Column_Bytes{Bytes: newOwner}},
+			},
+		})
+	if err != nil {
+		return nil, errors.New("Failed inserting row.")
+	}
+
+	myLogger.Debug("Pre Transfer...done")
+
+	return nil, nil
+}
+
+func (t *AssetManagementChaincode) transfer(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+	myLogger.Debug("Transfer...")
+
+	if len(args) != 2 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 2")
+	}
+
+	asset := args[0]
+
+	// Verify the identity of the caller
+	// Only the owner can transfer one of his assets
+	var columns []shim.Column
+	col1 := shim.Column{Value: &shim.Column_String_{String_: asset}}
+	columns = append(columns, col1)
+
+	row, err := stub.GetRow("AssetsOwnership", columns)
+	if err != nil {
+		return nil, fmt.Errorf("Failed retrieving asset [%s]: [%s]", asset, err)
+	}
+
+	broker := row.Columns[2].GetBytes()
+	myLogger.Debug("Broker of [%s] is [% x]", asset, broker)
+	if len(broker) == 0 {
+		return nil, fmt.Errorf("Invalid Broker. Nil")
+	}
+
+	newOwner := row.Columns[3].GetBytes()
+	myLogger.Debug("Previous owener of [%s] is [% x]", asset, newOwner)
+	if len(newOwner) == 0 {
+		return nil, fmt.Errorf("Invalid previous owner. Nil")
+	}
+
+	// Verify ownership and broker
+	ok, err := t.isCaller(stub, broker)
+	if err != nil {
+		return nil, errors.New("Failed checking asset broker identity")
+	}
+	if !ok {
+		return nil, errors.New("The caller is not the broker of the asset")
 	}
 
 	// At this point, the proof of ownership is valid, then register transfer
@@ -278,6 +416,44 @@ func (t *AssetManagementChaincode) Query(stub *shim.ChaincodeStub, function stri
 	myLogger.Debug("Query done [% x]", row.Columns[1].GetBytes())
 
 	return row.Columns[1].GetBytes(), nil
+}
+
+// Query callback representing the query of a chaincode
+// Supported functions are the following:
+// "query(asset)": returns the broker of the asset.
+// Anyone can invoke this function.
+func (t *AssetManagementChaincode) QueryBroker(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+	myLogger.Debug("Query [%s]", function)
+
+	if function != "querybroker" {
+		return nil, errors.New("Invalid query function name. Expecting \"query\"")
+	}
+
+	var err error
+
+	if len(args) != 1 {
+		myLogger.Debug("Incorrect number of arguments. Expecting name of an asset to query")
+		return nil, errors.New("Incorrect number of arguments. Expecting name of an asset to query")
+	}
+
+	// Who is the owner of the asset?
+	asset := args[0]
+
+	myLogger.Debug("Arg [%s]", string(asset))
+
+	var columns []shim.Column
+	col1 := shim.Column{Value: &shim.Column_String_{String_: asset}}
+	columns = append(columns, col1)
+
+	row, err := stub.GetRow("AssetsOwnership", columns)
+	if err != nil {
+		myLogger.Debug("Failed retriving asset [%s]: [%s]", string(asset), err)
+		return nil, fmt.Errorf("Failed retriving asset [%s]: [%s]", string(asset), err)
+	}
+
+	myLogger.Debug("Query Broker done [% x]", row.Columns[2].GetBytes())
+
+	return row.Columns[2].GetBytes(), nil
 }
 
 func main() {

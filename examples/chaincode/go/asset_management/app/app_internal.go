@@ -102,6 +102,15 @@ func initCryptoClients() error {
 		return err
 	}
 
+	// Joe as kimono
+	if err := crypto.RegisterClient("kimono", nil, "kimono", "1HB5XMLmzFVj"); err != nil {
+		return err
+	}
+	dave, err = crypto.InitClient("kimono", nil)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -200,7 +209,55 @@ func assignOwnershipInternal(invoker crypto.Client, invokerCert crypto.Certifica
 	return processTransaction(transaction)
 }
 
-func transferOwnershipInternal(owner crypto.Client, ownerCert crypto.CertificateHandler, asset string, newOwnerCert crypto.CertificateHandler) (resp *pb.Response, err error) {
+func assignBrokerInternal(invoker crypto.Client, invokerCert crypto.CertificateHandler, asset string, newBrokerCert crypto.CertificateHandler) (resp *pb.Response, err error) {
+	// Get a transaction handler to be used to submit the execute transaction
+	// and bind the chaincode access control logic using the binding
+	submittingCertHandler, err := invoker.GetTCertificateHandlerNext()
+	if err != nil {
+		return nil, err
+	}
+	txHandler, err := submittingCertHandler.GetTransactionHandler()
+	if err != nil {
+		return nil, err
+	}
+	binding, err := txHandler.GetBinding()
+	if err != nil {
+		return nil, err
+	}
+
+	chaincodeInput := &pb.ChaincodeInput{Function: "assignBroker", Args: []string{asset, string(newBrokerCert.GetCertificate())}}
+	chaincodeInputRaw, err := proto.Marshal(chaincodeInput)
+	if err != nil {
+		return nil, err
+	}
+
+	// Access control. Administrator signs chaincodeInputRaw || binding to confirm his identity
+	sigma, err := invokerCert.Sign(append(chaincodeInputRaw, binding...))
+	if err != nil {
+		return nil, err
+	}
+
+	// Prepare spec and submit
+	spec := &pb.ChaincodeSpec{
+		Type:                 1,
+		ChaincodeID:          &pb.ChaincodeID{Name: chaincodeName},
+		CtorMsg:              chaincodeInput,
+		Metadata:             sigma, // Proof of identity
+		ConfidentialityLevel: confidentialityLevel,
+	}
+
+	chaincodeInvocationSpec := &pb.ChaincodeInvocationSpec{ChaincodeSpec: spec}
+
+	// Now create the Transactions message and send to Peer.
+	transaction, err := txHandler.NewChaincodeExecute(chaincodeInvocationSpec, util.GenerateUUID())
+	if err != nil {
+		return nil, fmt.Errorf("Error deploying chaincode: %s ", err)
+	}
+
+	return processTransaction(transaction)
+}
+
+func preTransferOwnershipInternal(owner crypto.Client, ownerCert crypto.CertificateHandler, asset string, newOwnerCert crypto.CertificateHandler) (resp *pb.Response, err error) {
 	// Get a transaction handler to be used to submit the execute transaction
 	// and bind the chaincode access control logic using the binding
 
@@ -217,7 +274,7 @@ func transferOwnershipInternal(owner crypto.Client, ownerCert crypto.Certificate
 		return nil, err
 	}
 
-	chaincodeInput := &pb.ChaincodeInput{Function: "transfer", Args: []string{asset, string(newOwnerCert.GetCertificate())}}
+	chaincodeInput := &pb.ChaincodeInput{Function: "pretransfer", Args: []string{asset, string(newOwnerCert.GetCertificate())}}
 	chaincodeInputRaw, err := proto.Marshal(chaincodeInput)
 	if err != nil {
 		return nil, err
@@ -250,8 +307,81 @@ func transferOwnershipInternal(owner crypto.Client, ownerCert crypto.Certificate
 
 }
 
+func transferOwnershipInternal(broker crypto.Client, brokerCert crypto.CertificateHandler, asset string) (resp *pb.Response, err error) {
+	// Get a transaction handler to be used to submit the execute transaction
+	// and bind the chaincode access control logic using the binding
+
+	submittingCertHandler, err := broker.GetTCertificateHandlerNext()
+	if err != nil {
+		return nil, err
+	}
+	txHandler, err := submittingCertHandler.GetTransactionHandler()
+	if err != nil {
+		return nil, err
+	}
+	binding, err := txHandler.GetBinding()
+	if err != nil {
+		return nil, err
+	}
+
+	chaincodeInput := &pb.ChaincodeInput{Function: "transfer", Args: []string{asset}}
+	chaincodeInputRaw, err := proto.Marshal(chaincodeInput)
+	if err != nil {
+		return nil, err
+	}
+
+	// Access control. Broker signs chaincodeInputRaw || binding to confirm his identity
+	sigma, err := brokerCert.Sign(append(chaincodeInputRaw, binding...))
+	if err != nil {
+		return nil, err
+	}
+
+	// Prepare spec and submit
+	spec := &pb.ChaincodeSpec{
+		Type:                 1,
+		ChaincodeID:          &pb.ChaincodeID{Name: chaincodeName},
+		CtorMsg:              chaincodeInput,
+		Metadata:             sigma, // Proof of identity
+		ConfidentialityLevel: confidentialityLevel,
+	}
+
+	chaincodeInvocationSpec := &pb.ChaincodeInvocationSpec{ChaincodeSpec: spec}
+
+	// Now create the Transactions message and send to Peer.
+	transaction, err := txHandler.NewChaincodeExecute(chaincodeInvocationSpec, util.GenerateUUID())
+	if err != nil {
+		return nil, fmt.Errorf("Error deploying chaincode: %s ", err)
+	}
+
+	return processTransaction(transaction)
+
+}
+
 func whoIsTheOwner(invoker crypto.Client, asset string) (transaction *pb.Transaction, resp *pb.Response, err error) {
 	chaincodeInput := &pb.ChaincodeInput{Function: "query", Args: []string{asset}}
+
+	// Prepare spec and submit
+	spec := &pb.ChaincodeSpec{
+		Type:                 1,
+		ChaincodeID:          &pb.ChaincodeID{Name: chaincodeName},
+		CtorMsg:              chaincodeInput,
+		ConfidentialityLevel: confidentialityLevel,
+	}
+
+	chaincodeInvocationSpec := &pb.ChaincodeInvocationSpec{ChaincodeSpec: spec}
+
+	// Now create the Transactions message and send to Peer.
+	transaction, err = invoker.NewChaincodeQuery(chaincodeInvocationSpec, util.GenerateUUID())
+	if err != nil {
+		return nil, nil, fmt.Errorf("Error deploying chaincode: %s ", err)
+	}
+
+	resp, err = processTransaction(transaction)
+	return
+}
+
+func whoIsTheBroker(invoker crypto.Client, asset string) (transaction *pb.Transaction, resp *pb.Response, err error) {
+	chaincodeInput := &pb.ChaincodeInput{Function: "querybroker", Args: []string{asset}}
 
 	// Prepare spec and submit
 	spec := &pb.ChaincodeSpec{
