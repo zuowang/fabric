@@ -114,7 +114,7 @@ func (t *SimpleChaincode) Invoke(stub *shim.ChaincodeStub, function string, args
 	X, err = strconv.Atoi(args[2])
 	Aval = Aval - X
 	Bval = Bval + X
-	fmt.Printf("Aval = %d, Bval = %d\n", Aval, Bval)
+	//fmt.Printf("Aval = %d, Bval = %d\n", Aval, Bval)
 
 	// Write the state back to the ledger
 	err = stub.PutState(A, []byte(strconv.Itoa(Aval)))
@@ -126,8 +126,18 @@ func (t *SimpleChaincode) Invoke(stub *shim.ChaincodeStub, function string, args
 	if err != nil {
 		return nil, err
 	}
-
 */
+	var Aval, Bval int
+        
+        Avalbytes, _ := stub.GetState("a")
+	Aval, _ = strconv.Atoi(string(Avalbytes))
+        Bvalbytes, _ := stub.GetState("b")
+	Bval, _ = strconv.Atoi(string(Bvalbytes))
+	Aval = Aval - 10
+	Bval = Bval + 10
+	stub.PutState("a", []byte(strconv.Itoa(Aval)))
+	stub.PutState("b", []byte(strconv.Itoa(Bval)))
+
 	return nil, nil
 }
 
