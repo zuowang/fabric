@@ -72,6 +72,7 @@ func (t *SimpleChaincode) Init(stub *shim.ChaincodeStub, function string, args [
 
 // Transaction makes payment of X units from A to B
 func (t *SimpleChaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+/*
 	if function == "delete" {
 		// Deletes an entity from its state
 		return t.delete(stub, args)
@@ -126,6 +127,7 @@ func (t *SimpleChaincode) Invoke(stub *shim.ChaincodeStub, function string, args
 		return nil, err
 	}
 
+*/
 	return nil, nil
 }
 
