@@ -42,6 +42,25 @@ func SetupTestLogging() {
 		logging.SetLevel(level, "main")
 		logging.SetLevel(level, "server")
 		logging.SetLevel(level, "peer")
+                logging.SetLevel(level, "shim")
+                logging.SetLevel(level, "main")
+                logging.SetLevel(level, "server")
+                logging.SetLevel(level, "peer")
+                logging.SetLevel(level, "crypto")
+                logging.SetLevel(level, "status")
+                logging.SetLevel(level, "stop")
+                logging.SetLevel(level, "login")
+                logging.SetLevel(level, "vm")
+                logging.SetLevel(level, "chaincode")
+                logging.SetLevel(level, "container")
+                logging.SetLevel(level, "buckettree")
+                logging.SetLevel(level, "state")
+                logging.SetLevel(level, "statemgmt")
+                logging.SetLevel(level, "dockercontroller")
+                logging.SetLevel(level, "db")
+		logging.SetLevel(level, "ledger")
+		logging.SetLevel(level, "indexes")
+
 	} else {
 		chaincodeLogger.Warningf("Log level not recognized '%s', defaulting to %s: %s", viper.GetString("logging.peer"), logging.ERROR, err)
 		logging.SetLevel(logging.ERROR, "main")
@@ -71,4 +90,5 @@ func SetupTestConfig() {
 	// Set the number of maxprocs
 	var numProcsDesired = viper.GetInt("peer.gomaxprocs")
 	chaincodeLogger.Debugf("setting Number of procs to %d, was %d\n", numProcsDesired, runtime.GOMAXPROCS(2))
+	runtime.GOMAXPROCS(runtime.NumCPU())
 }

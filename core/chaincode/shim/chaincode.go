@@ -889,7 +889,7 @@ const (
 	LogCritical = LoggingLevel(logging.CRITICAL)
 )
 
-var shimLoggingLevel = LogDebug // Necessary for correct initialization; See Start()
+var shimLoggingLevel = LogCritical // Necessary for correct initialization; See Start()
 
 // SetLoggingLevel allows a Go language chaincode to set the logging level of
 // its shim.

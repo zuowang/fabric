@@ -26,8 +26,8 @@ security:
 #
 logging:
         trace: 0
-        info: 1
-        warning: 1
+        info: 0
+        warning: 0
         error: 1
         panic: 1
 
@@ -134,13 +134,13 @@ logging:
     #   info                                       - Set default to INFO
     #   warning:main,db=debug:chaincode=info       - Override default WARNING in main,db,chaincode
     #   chaincode=info:main=debug:db=debug:warning - Same as above
-    peer:      debug
-    crypto:    info
-    status:    warning
-    stop:      warning
-    login:     warning
-    vm:        warning
-    chaincode: warning
+    peer:      critical
+    crypto:    critical
+    status:    critical 
+    stop:      critical 
+    login:     critical 
+    vm:        critical 
+    chaincode: critical 
 
 
 ###############################################################################
