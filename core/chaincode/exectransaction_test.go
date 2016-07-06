@@ -534,10 +534,22 @@ func invokeExample02TransactionN(ctxt context.Context, cID *pb.ChaincodeID, args
 
 	start := time.Now()
 	for i := 0; i < N; i++ {
-		_, _, _, err := invoke(ctxt, spec, pb.Transaction_CHAINCODE_INVOKE)
-		if err != nil {
-			return fmt.Errorf("Error invoking <%s>: %s", chaincodeID, err)
-		}
+		ledgerObj, _ := ledger.GetLedger()
+		chaincodeID := cID.Name
+		astr, _ := ledgerObj.GetState(chaincodeID, "a", false)
+		bstr, _ := ledgerObj.GetState(chaincodeID, "b", false)
+		aval, _ := strconv.Atoi(string(astr))
+		bval, _ := strconv.Atoi(string(bstr))
+		aval -= 10
+		bval += 10
+		astr = []byte(strconv.Itoa(aval))
+		bstr = []byte(strconv.Itoa(bval))
+		ledgerObj.SetState(chaincodeID, "a", astr)
+		ledgerObj.SetState(chaincodeID, "b", bstr)
+		//_, _, _, err := invoke(ctxt, spec, pb.Transaction_CHAINCODE_INVOKE)
+		//if err != nil {
+		//	return fmt.Errorf("Error invoking <%s>: %s", chaincodeID, err)
+		//}
 	}
 	elapse := time.Now().Sub(start).Nanoseconds()
 	fmt.Printf("total time: %d\n", elapse)
