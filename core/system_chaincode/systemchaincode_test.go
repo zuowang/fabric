@@ -144,6 +144,85 @@ func TestExecuteDeploySysChaincode(t *testing.T) {
 	closeListenerAndSleep(lis)
 }
 
+// Test deploy of a transaction.
+func TestExecuteDeploySysChaincode2(t *testing.T) {
+	var opts []grpc.ServerOption
+	grpcServer := grpc.NewServer(opts...)
+	viper.Set("peer.fileSystemPath", "/var/hyperledger/test/tmpdb")
+
+	//use a different address than what we usually use for "peer"
+	//we override the peerAddress set in chaincode_support.go
+	peerAddress := "0.0.0.0:21726"
+	lis, err := net.Listen("tcp", peerAddress)
+	if err != nil {
+		t.Fail()
+		t.Logf("Error starting peer listener %s", err)
+		return
+	}
+
+	getPeerEndpoint := func() (*pb.PeerEndpoint, error) {
+		return &pb.PeerEndpoint{ID: &pb.PeerID{Name: "testpeer"}, Address: peerAddress}, nil
+	}
+
+	ccStartupTimeout := time.Duration(5000) * time.Millisecond
+	pb.RegisterChaincodeSupportServer(grpcServer, chaincode.NewChaincodeSupport(chaincode.DefaultChain, getPeerEndpoint, false, ccStartupTimeout, nil))
+
+	go grpcServer.Serve(lis)
+
+	var ctxt = context.Background()
+
+	//set systemChaincodes to sample
+	systemChaincodes = []*api.SystemChaincode{
+		{
+			Enabled:   true,
+			Name:      "sample_syscc",
+			Path:      "github.com/hyperledger/fabric/core/system_chaincode/samplesyscc",
+			InitArgs:  []string{},
+			Chaincode: &samplesyscc.SampleSysCC{},
+		},
+	}
+
+	RegisterSysCCs()
+
+	url := "github.com/hyperledger/fabric/core/system_chaincode/sample_syscc"
+	f := "putval"
+	args := []string{"greeting", "hey there"}
+
+	spec := &pb.ChaincodeSpec{Type: 1, ChaincodeID: &pb.ChaincodeID{Name: "sample_syscc", Path: url}, CtorMsg: &pb.ChaincodeInput{Function: f, Args: args}}
+
+	start := time.Now()
+	for i := 0; i < 10000; i++ {
+		_, _, _, err = invoke(ctxt, spec, pb.Transaction_CHAINCODE_INVOKE)
+	}
+	elapse := time.Now().Sub(start).Nanoseconds()
+	fmt.Printf("total time: %d\n", elapse)
+
+	if err != nil {
+		closeListenerAndSleep(lis)
+		t.Fail()
+		t.Logf("Error invoking sample_syscc: %s", err)
+		return
+	}
+
+	f = "getval"
+	args = []string{"greeting"}
+	spec = &pb.ChaincodeSpec{Type: 1, ChaincodeID: &pb.ChaincodeID{Name: "sample_syscc", Path: url}, CtorMsg: &pb.ChaincodeInput{Function: f, Args: args}}
+	_, _, _, err = invoke(ctxt, spec, pb.Transaction_CHAINCODE_QUERY)
+	if err != nil {
+		closeListenerAndSleep(lis)
+		t.Fail()
+		t.Logf("Error invoking sample_syscc: %s", err)
+		return
+	}
+
+	cds := &pb.ChaincodeDeploymentSpec{ExecEnv: 1, ChaincodeSpec: &pb.ChaincodeSpec{Type: 1, ChaincodeID: &pb.ChaincodeID{Name: "sample_syscc", Path: url}, CtorMsg: &pb.ChaincodeInput{Args: args}}}
+
+	chaincode.GetChain(chaincode.DefaultChain).Stop(ctxt, cds)
+
+	closeListenerAndSleep(lis)
+}
+
+
 func TestMain(m *testing.M) {
 	SetupTestConfig()
 	os.Exit(m.Run())
