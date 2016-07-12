@@ -27,6 +27,7 @@ import (
 	"errors"
 
 	"strconv"
+	"strings"
 )
 
 var chaincodeLogger = logging.MustGetLogger("blacklist")
@@ -174,8 +175,8 @@ func (t *BlacklistChaincode) Delete(stub *shim.ChaincodeStub, args []string) ([]
 }
 
 func (t *BlacklistChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-	if len(args) != 2 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 2")
+	if len(args) != 1 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
 
 	callerRole, err := stub.ReadCertAttribute("role")
@@ -197,58 +198,122 @@ func (t *BlacklistChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]by
 	}
 	OrganizationId := string(OrganizationIdAsbytes)
 
-	InputOrganizationId := args[1]
-	valAsbytes, err := stub.GetState(UserId + InputOrganizationId)
+	iter, err := stub.RangeQueryState(UserId+"1", UserId+":")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Error fetching blacklist: [%v]", err)
 	}
-	// Read counter plus one if read other's blacklist
-	if (OrganizationId != InputOrganizationId) {
-		OldReadsAsbytes, err := stub.GetState(ReadsPrefix + OrganizationId)
-		if err != nil {
-			return nil, err
-		}
-		OldReads, err := strconv.Atoi(string(OldReadsAsbytes))
-		if err != nil {
-			return nil, err
-		}
-		err = stub.PutState(OrganizationId, []byte(strconv.Itoa(OldReads + 1)))
-		if err != nil {
-			return nil, err
-		}
+	defer iter.Close()
 
-		OldSharesAsbytes, err := stub.GetState(SharesPrefix + InputOrganizationId)
+	for iter.HasNext() {
+		_, valBytes, err := iter.Next()
 		if err != nil {
 			return nil, err
 		}
-		OldShares, err := strconv.Atoi(string(OldSharesAsbytes))
-		if err != nil {
-			return nil, err
-		}
-		err = stub.PutState(SharesPrefix + InputOrganizationId, []byte(strconv.Itoa(OldShares + 1)))
-		if err != nil {
-			return nil, err
-		}
+		val := strings.Split(string(valBytes), ',')
+		// Read counter plus one if read other's blacklist
+		if (val[1] != OrganizationId) {
+			OldReadsAsbytes, err := stub.GetState(ReadsPrefix + OrganizationId)
+			if err != nil {
+				return nil, err
+			}
+			OldReads, err := strconv.Atoi(string(OldReadsAsbytes))
+			if err != nil {
+				return nil, err
+			}
+			err = stub.PutState(OrganizationId, []byte(strconv.Itoa(OldReads + 1)))
+			if err != nil {
+				return nil, err
+			}
 
-		OldSharesAsbytes, err = stub.GetState(UserId + InputOrganizationId + SharesSuffix)
-		if err != nil {
-			return nil, err
-		}
-		OldShares, err = strconv.Atoi(string(OldSharesAsbytes))
-		if err != nil {
-			return nil, err
-		}
-		err = stub.PutState(UserId + InputOrganizationId + SharesSuffix, []byte(strconv.Itoa(OldShares + 1)))
-		if err != nil {
-			return nil, err
+			OldSharesAsbytes, err := stub.GetState(SharesPrefix + val[1])
+			if err != nil {
+				return nil, err
+			}
+			OldShares, err := strconv.Atoi(string(OldSharesAsbytes))
+			if err != nil {
+				return nil, err
+			}
+			err = stub.PutState(SharesPrefix + val[1], []byte(strconv.Itoa(OldShares + 1)))
+			if err != nil {
+				return nil, err
+			}
+
+			OldSharesAsbytes, err = stub.GetState(UserId + val[1] + SharesSuffix)
+			if err != nil {
+				return nil, err
+			}
+			OldShares, err = strconv.Atoi(string(OldSharesAsbytes))
+			if err != nil {
+				return nil, err
+			}
+			err = stub.PutState(UserId + val[1] + SharesSuffix, []byte(strconv.Itoa(OldShares + 1)))
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	return valAsbytes, nil
+	return nil, nil
 }
 
 func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
-	return nil, nil
+	if function == "fetch" {
+		return t.Fetch(stub, args)
+	} else if function == "account" {
+		return t.Account(stub, args)
+	}
+
+	return nil, errors.New("Received unknown function invocation")
+}
+
+func (t *BlacklistChaincode) Fetch(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+	if len(args) != 1 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1")
+	}
+
+	UserId := args[0]
+	iter, err := stub.RangeQueryState(UserId+"1", UserId+":")
+	if err != nil {
+		return nil, fmt.Errorf("Error fetching blacklist: [%v]", err)
+	}
+	defer iter.Close()
+
+	var resultBytes []byte
+	for iter.HasNext() {
+		_, valBytes, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+		resultBytes += valBytes
+	}
+
+	return resultBytes, nil
+}
+
+func (t *BlacklistChaincode) Account(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+	if len(args) != 0 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 0")
+	}
+
+	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
+	if err != nil {
+		return nil, err
+	}
+	OrganizationId := string(OrganizationIdAsbytes)
+	writesBytes, err := stub.GetState(WritesPrefix + OrganizationId)
+	if err != nil {
+		return nil, err
+	}
+	readsBytes, err := stub.GetState(ReadsPrefix + OrganizationId)
+	if err != nil {
+		return nil, err
+	}
+	sharesBytes, err := stub.GetState(SharesPrefix + OrganizationId)
+	if err != nil {
+		return nil, err
+	}
+
+	return writesBytes + readsBytes + sharesBytes, nil
 }
 
 func main() {
