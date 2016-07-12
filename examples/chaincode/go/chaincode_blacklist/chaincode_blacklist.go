@@ -26,31 +26,40 @@ import (
 	"github.com/op/go-logging"
 	"errors"
 
-	"strings"
 	"strconv"
 )
 
 var chaincodeLogger = logging.MustGetLogger("blacklist")
 
-// BlacklistChaincode implements the insert into and query of blacklist providing user with a "ally" role.
+// BlacklistChaincode implements the insert into and query of blacklist providing user with a "Organization" role.
 type BlacklistChaincode struct {
 }
 
 var WritesPrefix = "#w"
 var ReadsPrefix = "#r"
+var SharesPrefix = "#s"
+var CreditsPrefix = "#c"
+var SharesSuffix = "#"
 
 func (t *BlacklistChaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
-	if len(args) != 0 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 0")
+	if len(args) == 0 {
+		return nil, errors.New("Incorrect number of arguments. Expecting > 0")
 	}
 
-	AllyIds := strings.Split(args[0], ",")
-	for _, AllyId := range AllyIds {
-		err := stub.PutState(WritesPrefix + AllyId, []byte(strconv.Itoa(0)))
+	for _, OrganizationId := range args {
+		err := stub.PutState(WritesPrefix + OrganizationId, []byte(strconv.Itoa(0)))
 		if err != nil {
 			return nil, err
 		}
-		err = stub.PutState(ReadsPrefix + AllyId, []byte(strconv.Itoa(0)))
+		err = stub.PutState(ReadsPrefix + OrganizationId, []byte(strconv.Itoa(0)))
+		if err != nil {
+			return nil, err
+		}
+		err = stub.PutState(SharesPrefix + OrganizationId, []byte(strconv.Itoa(0)))
+		if err != nil {
+			return nil, err
+		}
+		err = stub.PutState(CreditsPrefix + OrganizationId, []byte(strconv.Itoa(950)))
 		if err != nil {
 			return nil, err
 		}
@@ -60,6 +69,17 @@ func (t *BlacklistChaincode) Init(stub *shim.ChaincodeStub, function string, arg
 }
 
 func (t *BlacklistChaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+	callerRole, err := stub.ReadCertAttribute("role")
+	if err != nil {
+		chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
+		return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
+	}
+
+	caller := string(callerRole)
+	if (caller != "Organization") {
+		chaincodeLogger.Errorf("Failed validating caller role")
+		return nil, fmt.Errorf("Failed validating caller role.")
+	}
 	if function == "write" {
 		return t.Write(stub, args)
 	} else if function == "delete" {
@@ -70,70 +90,157 @@ func (t *BlacklistChaincode) Invoke(stub *shim.ChaincodeStub, function string, a
 }
 
 func (t *BlacklistChaincode) Write(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-	if len(args) != 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 1")
+	argsLen := len(args)
+	if argsLen == 0 {
+		return nil, errors.New("Incorrect number of arguments. Expecting > 0")
 	}
 
-	UserIds := strings.Split(args[0], ",")
-	AllyIdBytes, err := stub.GetCallerMetadata()
-	NewWrites := 0
-	for _, UserId := range UserIds {
-		NewWrites++
-		err = stub.PutState(UserId, []byte(args[NewWrites]))
+	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
+	if err != nil {
+		return nil, err
+	}
+	OrganizationId := string(OrganizationIdAsbytes)
+	OldWritesAsbytes, err := stub.GetState(WritesPrefix + OrganizationId)
+	if err != nil {
+		return nil, err
+	}
+	OldWrites, err := strconv.Atoi(string(OldWritesAsbytes))
+	if err != nil {
+		return nil, err
+	}
+	for i := 1; i < argsLen; i += 2 {
+		_, err = stub.GetState(args[i - 1] + OrganizationId)
+		if err != nil {
+			chaincodeLogger.Errorf("Already exists in blacklist")
+			continue
+		}
+
+		err = stub.PutState(args[i - 1] + OrganizationId, []byte(args[i]))
 		if err != nil {
 			return nil, err
 		}
+
+		err = stub.PutState(args[i - 1] + OrganizationId + SharesSuffix, []byte(strconv.Itoa(0)))
+		if err != nil {
+			return nil, err
+		}
+		OldWrites++
 	}
-	AllyId := string(AllyIdBytes)
-	OldWritesBytes, err := stub.GetState(WritesPrefix + AllyId)
-	OldWrites, _ := strconv.Atoi(string(OldWritesBytes))
-	stub.PutState(AllyId, []byte(strconv.Itoa(OldWrites + NewWrites)))
+	err = stub.PutState(OrganizationId, []byte(strconv.Itoa(OldWrites)))
+	if err != nil {
+		return nil, err
+	}
 
 	return nil, nil
 }
 
 func (t *BlacklistChaincode) Delete(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-	if len(args) != 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 1")
+	if len(args) == 0 {
+		return nil, errors.New("Incorrect number of arguments. Expecting > 0")
 	}
 
-	UserIds := strings.Split(args[0], ",")
-	AllyIdBytes, err := stub.GetCallerMetadata()
-	NewWrites := 0
-	for _, UserId := range UserIds {
-		NewWrites++
-		err = stub.DelState(UserId)
+	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
+	if err != nil {
+		return nil, err
+	}
+	OrganizationId := string(OrganizationIdAsbytes)
+	OldWritesAsbytes, err := stub.GetState(WritesPrefix + OrganizationId)
+	if err != nil {
+		return nil, err
+	}
+	OldWrites, err := strconv.Atoi(string(OldWritesAsbytes))
+	if err != nil {
+		return nil, err
+	}
+	for _, UserId := range args {
+		err = stub.DelState(UserId + OrganizationId)
 		if err != nil {
 			return nil, err
 		}
+		err = stub.DelState(UserId + OrganizationId + SharesSuffix)
+		if err != nil {
+			return nil, err
+		}
+		OldWrites--
 	}
-	AllyId := string(AllyIdBytes)
-	OldWritesBytes, err := stub.GetState(WritesPrefix + AllyId)
-	OldWrites, _ := strconv.Atoi(string(OldWritesBytes))
-	stub.PutState(AllyId, []byte(strconv.Itoa(OldWrites - NewWrites)))
 
+	err = stub.PutState(OrganizationId, []byte(strconv.Itoa(OldWrites)))
+	if err != nil {
+		return nil, err
+	}
 	return nil, nil
 }
 
 func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
-	if len(args) != 1 {
+	if len(args) != 2 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
 
+	callerRole, err := stub.ReadCertAttribute("role")
+	if err != nil {
+		chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
+		return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
+	}
+
+	caller := string(callerRole)
+	if (caller != "Organization") {
+		chaincodeLogger.Errorf("Failed validating caller role")
+		return nil, fmt.Errorf("Failed validating caller role.")
+	}
+
 	UserId := args[0]
-	AllyIdBytes, err := stub.GetCallerMetadata()
+	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
 	if err != nil {
 		return nil, errors.New("Failed getting metadata")
 	}
+	OrganizationId := string(OrganizationIdAsbytes)
 
-	valAsbytes, err := stub.GetState(UserId)
+	InputOrganizationId := args[0]
+	valAsbytes, err := stub.GetState(UserId + InputOrganizationId)
 	if err != nil {
 		return nil, err
 	}
-	AllyId := string(AllyIdBytes)
-	OldReadsBytes, err := stub.GetState(ReadsPrefix + AllyId)
-	OldReads, _ := strconv.Atoi(string(OldReadsBytes))
-	stub.PutState(AllyId, []byte(strconv.Itoa(OldReads + 1)))
+	// Read counter plus one if read other's blacklist
+	if (OrganizationId != InputOrganizationId) {
+		OldReadsAsbytes, err := stub.GetState(ReadsPrefix + OrganizationId)
+		if err != nil {
+			return nil, err
+		}
+		OldReads, err := strconv.Atoi(string(OldReadsAsbytes))
+		if err != nil {
+			return nil, err
+		}
+		err = stub.PutState(OrganizationId, []byte(strconv.Itoa(OldReads + 1)))
+		if err != nil {
+			return nil, err
+		}
+
+		OldSharesAsbytes, err := stub.GetState(SharesPrefix + InputOrganizationId)
+		if err != nil {
+			return nil, err
+		}
+		OldShares, err := strconv.Atoi(string(OldSharesAsbytes))
+		if err != nil {
+			return nil, err
+		}
+		err = stub.PutState(SharesPrefix + InputOrganizationId, []byte(strconv.Itoa(OldShares + 1)))
+		if err != nil {
+			return nil, err
+		}
+
+		OldSharesAsbytes, err = stub.GetState(UserId + InputOrganizationId + SharesSuffix)
+		if err != nil {
+			return nil, err
+		}
+		OldShares, err = strconv.Atoi(string(OldSharesAsbytes))
+		if err != nil {
+			return nil, err
+		}
+		err = stub.PutState(UserId + InputOrganizationId + SharesSuffix, []byte(strconv.Itoa(OldShares + 1)))
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return valAsbytes, nil
 }
