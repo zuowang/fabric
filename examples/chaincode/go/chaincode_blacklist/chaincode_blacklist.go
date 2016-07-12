@@ -84,6 +84,8 @@ func (t *BlacklistChaincode) Invoke(stub *shim.ChaincodeStub, function string, a
 		return t.Write(stub, args)
 	} else if function == "delete" {
 		return t.Delete(stub, args)
+	} else if function == "read" {
+		return t.Read(stub, args)
 	}
 
 	return nil, errors.New("Received unknown function invocation")
@@ -171,9 +173,9 @@ func (t *BlacklistChaincode) Delete(stub *shim.ChaincodeStub, args []string) ([]
 	return nil, nil
 }
 
-func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+func (t *BlacklistChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
 	if len(args) != 2 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 1")
+		return nil, errors.New("Incorrect number of arguments. Expecting 2")
 	}
 
 	callerRole, err := stub.ReadCertAttribute("role")
@@ -195,7 +197,7 @@ func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, ar
 	}
 	OrganizationId := string(OrganizationIdAsbytes)
 
-	InputOrganizationId := args[0]
+	InputOrganizationId := args[1]
 	valAsbytes, err := stub.GetState(UserId + InputOrganizationId)
 	if err != nil {
 		return nil, err
@@ -243,6 +245,10 @@ func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, ar
 	}
 
 	return valAsbytes, nil
+}
+
+func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
+	return nil, nil
 }
 
 func main() {
