@@ -70,17 +70,17 @@ func (t *BlacklistChaincode) Init(stub *shim.ChaincodeStub, function string, arg
 }
 
 func (t *BlacklistChaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
-	callerRole, err := stub.ReadCertAttribute("role")
-	if err != nil {
-		chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
-		return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
-	}
-
-	caller := string(callerRole)
-	if (caller != "Organization") {
-		chaincodeLogger.Errorf("Failed validating caller role")
-		return nil, fmt.Errorf("Failed validating caller role.")
-	}
+	//callerRole, err := stub.ReadCertAttribute("role")
+	//if err != nil {
+	//	chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
+	//	return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
+	//}
+	//
+	//caller := string(callerRole)
+	//if (caller != "Organization") {
+	//	chaincodeLogger.Errorf("Failed validating caller role")
+	//	return nil, fmt.Errorf("Failed validating caller role.")
+	//}
 	if function == "write" {
 		return t.Write(stub, args)
 	} else if function == "delete" {
@@ -98,19 +98,22 @@ func (t *BlacklistChaincode) Write(stub *shim.ChaincodeStub, args []string) ([]b
 		return nil, errors.New("Incorrect number of arguments. Expecting > 0")
 	}
 
-	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
-	if err != nil {
-		return nil, err
-	}
-	OrganizationId := string(OrganizationIdAsbytes)
-	OldWritesAsbytes, err := stub.GetState(WritesPrefix + OrganizationId)
-	if err != nil {
-		return nil, err
-	}
-	OldWrites, err := strconv.Atoi(string(OldWritesAsbytes))
-	if err != nil {
-		return nil, err
-	}
+	//OrganizationIdAsbytes, err := stub.GetCallerMetadata()
+	//if err != nil {
+	//	return nil, err
+	//}
+	//OrganizationId := string(OrganizationIdAsbytes)
+	OrganizationId := ""
+	//OldWritesAsbytes, err := stub.GetState(WritesPrefix + OrganizationId)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//OldWrites, err := strconv.Atoi(string(OldWritesAsbytes))
+	//if err != nil {
+	//	return nil, err
+	//}
+	OldWrites := 0
+	var err error
 	for i := 1; i < argsLen; i += 2 {
 		_, err = stub.GetState(args[i - 1] + OrganizationId)
 		if err != nil {
@@ -118,21 +121,23 @@ func (t *BlacklistChaincode) Write(stub *shim.ChaincodeStub, args []string) ([]b
 			continue
 		}
 
+		chaincodeLogger.Infof("PutState [%v]", args[i - 1] + OrganizationId)
 		err = stub.PutState(args[i - 1] + OrganizationId, []byte(args[i]))
 		if err != nil {
 			return nil, err
 		}
 
+		chaincodeLogger.Infof("PutState [%v]", args[i - 1] + OrganizationId + SharesSuffix)
 		err = stub.PutState(args[i - 1] + OrganizationId + SharesSuffix, []byte(strconv.Itoa(0)))
 		if err != nil {
 			return nil, err
 		}
 		OldWrites++
 	}
-	err = stub.PutState(OrganizationId, []byte(strconv.Itoa(OldWrites)))
-	if err != nil {
-		return nil, err
-	}
+	//err = stub.PutState(OrganizationId, []byte(strconv.Itoa(OldWrites)))
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	return nil, nil
 }
@@ -179,17 +184,17 @@ func (t *BlacklistChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]by
 		return nil, errors.New("Incorrect number of arguments. Expecting 1")
 	}
 
-	callerRole, err := stub.ReadCertAttribute("role")
-	if err != nil {
-		chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
-		return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
-	}
-
-	caller := string(callerRole)
-	if (caller != "Organization") {
-		chaincodeLogger.Errorf("Failed validating caller role")
-		return nil, fmt.Errorf("Failed validating caller role.")
-	}
+	//callerRole, err := stub.ReadCertAttribute("role")
+	//if err != nil {
+	//	chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
+	//	return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
+	//}
+	//
+	//caller := string(callerRole)
+	//if (caller != "Organization") {
+	//	chaincodeLogger.Errorf("Failed validating caller role")
+	//	return nil, fmt.Errorf("Failed validating caller role.")
+	//}
 
 	UserId := args[0]
 	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
@@ -209,7 +214,7 @@ func (t *BlacklistChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]by
 		if err != nil {
 			return nil, err
 		}
-		val := strings.Split(string(valBytes), ',')
+		val := strings.Split(string(valBytes), ",")
 		// Read counter plus one if read other's blacklist
 		if (val[1] != OrganizationId) {
 			OldReadsAsbytes, err := stub.GetState(ReadsPrefix + OrganizationId)
@@ -272,21 +277,36 @@ func (t *BlacklistChaincode) Fetch(stub *shim.ChaincodeStub, args []string) ([]b
 	}
 
 	UserId := args[0]
-	iter, err := stub.RangeQueryState(UserId+"1", UserId+":")
+	//iter, err := stub.RangeQueryState(UserId, UserId+":")
+	//if err != nil {
+	//	return nil, fmt.Errorf("Error fetching blacklist: [%v]", err)
+	//}
+	//defer iter.Close()
+	//
+	//var resultBytes []byte
+	//resultBytes = nil
+	//for iter.HasNext() {
+	//	_, valBytes, err := iter.Next()
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//	resultBytes = valBytes
+	//}
+	//
+	//if resultBytes == nil {
+	//	return nil, fmt.Errorf("Error Nil for [%v]", UserId)
+	//}
+	//OrganizationIdAsbytes, err := stub.GetCallerMetadata()
+	//if err != nil {
+	//	return nil, errors.New("Failed getting metadata")
+	//}
+	//OrganizationId := string(OrganizationIdAsbytes)
+	OrganizationId := ""
+	chaincodeLogger.Infof("GetState [%v]", UserId + OrganizationId)
+	resultBytes, err := stub.GetState(UserId + OrganizationId)
 	if err != nil {
-		return nil, fmt.Errorf("Error fetching blacklist: [%v]", err)
+		return nil, err
 	}
-	defer iter.Close()
-
-	var resultBytes []byte
-	for iter.HasNext() {
-		_, valBytes, err := iter.Next()
-		if err != nil {
-			return nil, err
-		}
-		resultBytes += valBytes
-	}
-
 	return resultBytes, nil
 }
 
@@ -294,6 +314,18 @@ func (t *BlacklistChaincode) Account(stub *shim.ChaincodeStub, args []string) ([
 	if len(args) != 0 {
 		return nil, errors.New("Incorrect number of arguments. Expecting 0")
 	}
+
+	//callerRole, err := stub.ReadCertAttribute("role")
+	//if err != nil {
+	//	chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
+	//	return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
+	//}
+	//
+	//caller := string(callerRole)
+	//if (caller != "Organization") {
+	//	chaincodeLogger.Errorf("Failed validating caller role")
+	//	return nil, fmt.Errorf("Failed validating caller role.")
+	//}
 
 	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
 	if err != nil {
@@ -304,16 +336,16 @@ func (t *BlacklistChaincode) Account(stub *shim.ChaincodeStub, args []string) ([
 	if err != nil {
 		return nil, err
 	}
-	readsBytes, err := stub.GetState(ReadsPrefix + OrganizationId)
+	_, err = stub.GetState(ReadsPrefix + OrganizationId)
 	if err != nil {
 		return nil, err
 	}
-	sharesBytes, err := stub.GetState(SharesPrefix + OrganizationId)
+	_, err = stub.GetState(SharesPrefix + OrganizationId)
 	if err != nil {
 		return nil, err
 	}
 
-	return writesBytes + readsBytes + sharesBytes, nil
+	return writesBytes, nil
 }
 
 func main() {
