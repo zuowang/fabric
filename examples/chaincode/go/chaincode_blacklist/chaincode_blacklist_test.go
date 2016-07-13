@@ -22,14 +22,14 @@ import (
 	"testing"
 	"time"
 
-	"encoding/base64"
+	//"encoding/base64"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/hyperledger/fabric/core/chaincode"
 	"github.com/hyperledger/fabric/core/chaincode/shim"
-	"github.com/hyperledger/fabric/core/chaincode/shim/crypto/attr"
+	//"github.com/hyperledger/fabric/core/chaincode/shim/crypto/attr"
 	"github.com/hyperledger/fabric/core/container"
 	"github.com/hyperledger/fabric/core/crypto"
 	"github.com/hyperledger/fabric/core/ledger"
@@ -42,7 +42,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 
-	"reflect"
+	//"reflect"
 )
 
 const (
@@ -55,9 +55,9 @@ var (
 	lis net.Listener
 
 	administrator  crypto.Client
-	idc_user       crypto.Client
-	credit_user    crypto.Client
-	microloan_user crypto.Client
+	idcUser       crypto.Client
+	creditUser    crypto.Client
+	microloanUser crypto.Client
 
 	server *grpc.Server
 	aca    *ca.ACA
@@ -88,8 +88,8 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	fmt.Println("Wait for 30 secs for chaincode to be started")
-	time.Sleep(30 * time.Second)
+	fmt.Println("Wait for 5 secs for chaincode to be started")
+	time.Sleep(5 * time.Second)
 
 	ret := m.Run()
 
@@ -106,83 +106,89 @@ func TestBlacklist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := deploy(adminCert); err != nil {
+	if err := deploy(adminCert, []string{"idc", "microloan", "credit"}); err != nil {
 		t.Fatal(err)
 	}
 
-	// Administrator assigns ownership of Picasso to Alice
-	aliceCert, err := alice.GetTCertificateHandlerNext("role", "account")
-	if err != nil {
+	// idcUser upload a blacklist
+	if err := uploadBlacklist(idcUser, "idc", []string{"user1", "2016-07-12 16:37:21,2016-07-12", "user2", "2016-07-12 16:37:21,2016-07-12", "user3", "2016-07-12 16:37:21,2016-07-12"}); err != nil {
 		t.Fatal(err)
 	}
 
-	// This must fail
-	if err := assignOwnership(alice, "Picasso", aliceCert); err == nil {
-		t.Fatal("Alice doesn't have the assigner role. Assignment should fail.")
-	}
+	fmt.Println("uploadBlacklist")
 
-	// This must succeed
-	if err := assignOwnership(administrator, "Picasso", aliceCert); err != nil {
+	if err := fetchBlacklist(idcUser, "idc", []string{"user1"}); err != nil {
 		t.Fatal(err)
 	}
 
-	// Check who is the owner of the Picasso
-	theOnwerIs, err := whoIsTheOwner("Picasso")
-	if err != nil {
+	fmt.Println("fetchBlacklist")
+
+	if err := account(idcUser, "idc", []string{}); err != nil {
 		t.Fatal(err)
 	}
 
-	aliceAccount, err := attr.GetValueFrom("account", aliceCert.GetCertificate())
-	if !reflect.DeepEqual(theOnwerIs, aliceAccount) {
-		fmt.Printf("%v --- %v", string(theOnwerIs), string(aliceAccount))
-		t.Fatal("Alice is not the owner of Picasso")
-	}
-
-	// Alice transfers ownership of Picasso to Bob
-	bobCert, err := bob.GetTCertificateHandlerNext("role", "account")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// This must fail
-	if err := transferOwnership(bob, bobCert, "Picasso", adminCert); err == nil {
-		t.Fatal(err)
-	}
-
-	// This must succeed
-	if err := transferOwnership(alice, aliceCert, "Picasso", bobCert); err != nil {
-		t.Fatal(err)
-	}
-
-	// Check who is the owner of the Picasso
-	theOnwerIs, err = whoIsTheOwner("Picasso")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	bobAccount, err := attr.GetValueFrom("account", bobCert.GetCertificate())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(theOnwerIs, bobAccount) {
-		t.Fatal("Bob is not the owner of Picasso")
-	}
-
-	// Check who is the owner of an asset that doesn't exist
-	_, err = whoIsTheOwner("Klee")
-	if err == nil {
-		t.Fatal("This asset doesn't exist. Querying should fail.")
-	}
+	fmt.Println("account")
+	//// This must succeed
+	//if err := assignOwnership(administrator, "Picasso", aliceCert); err != nil {
+	//	t.Fatal(err)
+	//}
+	//
+	//// Check who is the owner of the Picasso
+	//theOnwerIs, err := whoIsTheOwner("Picasso")
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+	//
+	//aliceAccount, err := attr.GetValueFrom("account", aliceCert.GetCertificate())
+	//if !reflect.DeepEqual(theOnwerIs, aliceAccount) {
+	//	fmt.Printf("%v --- %v", string(theOnwerIs), string(aliceAccount))
+	//	t.Fatal("Alice is not the owner of Picasso")
+	//}
+	//
+	//// Alice transfers ownership of Picasso to Bob
+	//bobCert, err := bob.GetTCertificateHandlerNext("role", "account")
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+	//
+	//// This must fail
+	//if err := transferOwnership(bob, bobCert, "Picasso", adminCert); err == nil {
+	//	t.Fatal(err)
+	//}
+	//
+	//// This must succeed
+	//if err := transferOwnership(alice, aliceCert, "Picasso", bobCert); err != nil {
+	//	t.Fatal(err)
+	//}
+	//
+	//// Check who is the owner of the Picasso
+	//theOnwerIs, err = whoIsTheOwner("Picasso")
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+	//
+	//bobAccount, err := attr.GetValueFrom("account", bobCert.GetCertificate())
+	//if err != nil {
+	//	t.Fatal(err)
+	//}
+	//
+	//if !reflect.DeepEqual(theOnwerIs, bobAccount) {
+	//	t.Fatal("Bob is not the owner of Picasso")
+	//}
+	//
+	//// Check who is the owner of an asset that doesn't exist
+	//_, err = whoIsTheOwner("Klee")
+	//if err == nil {
+	//	t.Fatal("This asset doesn't exist. Querying should fail.")
+	//}
 }
 
-func deploy(admCert crypto.CertificateHandler) error {
+func deploy(admCert crypto.CertificateHandler,args []string) error {
 	// Prepare the spec. The metadata includes the role of the users allowed to assign assets
 	spec := &pb.ChaincodeSpec{
 		Type:                 1,
 		ChaincodeID:          &pb.ChaincodeID{Name: "mycc"},
-		CtorMsg:              &pb.ChaincodeInput{Function: "init", Args: []string{}},
-		Metadata:             []byte("assigner"),
+		CtorMsg:              &pb.ChaincodeInput{Function: "init", Args: args},
 		ConfidentialityLevel: pb.ConfidentialityLevel_PUBLIC,
 	}
 
@@ -212,10 +218,10 @@ func deploy(admCert crypto.CertificateHandler) error {
 	return err
 }
 
-func assignOwnership(assigner crypto.Client, asset string, newOwnerCert crypto.CertificateHandler) error {
+func uploadBlacklist(client crypto.Client, orgName string, args []string) error {
 	// Get a transaction handler to be used to submit the execute transaction
 	// and bind the chaincode access control logic using the binding
-	submittingCertHandler, err := assigner.GetTCertificateHandlerNext("role")
+	submittingCertHandler, err := client.GetTCertificateHandlerNext("role")
 	if err != nil {
 		return err
 	}
@@ -224,14 +230,14 @@ func assignOwnership(assigner crypto.Client, asset string, newOwnerCert crypto.C
 		return err
 	}
 
-	newOwner := base64.StdEncoding.EncodeToString(newOwnerCert.GetCertificate())
-	chaincodeInput := &pb.ChaincodeInput{Function: "assign", Args: []string{asset, newOwner}}
+	chaincodeInput := &pb.ChaincodeInput{Function: "write", Args: args}
 
 	// Prepare spec and submit
 	spec := &pb.ChaincodeSpec{
 		Type:                 1,
 		ChaincodeID:          &pb.ChaincodeID{Name: "mycc"},
 		CtorMsg:              chaincodeInput,
+		Metadata:             []byte(orgName),
 		ConfidentialityLevel: pb.ConfidentialityLevel_PUBLIC,
 	}
 
@@ -243,25 +249,60 @@ func assignOwnership(assigner crypto.Client, asset string, newOwnerCert crypto.C
 	// Now create the Transactions message and send to Peer.
 	transaction, err := txHandler.NewChaincodeExecute(chaincodeInvocationSpec, tid)
 	if err != nil {
-		return fmt.Errorf("Error deploying chaincode: %s ", err)
+		return fmt.Errorf("Error new transaction: %s ", err)
 	}
 
 	ledger, err := ledger.GetLedger()
 	ledger.BeginTxBatch("1")
 	_, _, err = chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), transaction)
 	if err != nil {
-		return fmt.Errorf("Error deploying chaincode: %s", err)
+		return fmt.Errorf("Error invoking chaincode: %s", err)
 	}
 	ledger.CommitTxBatch("1", []*pb.Transaction{transaction}, nil, nil)
 
 	return err
 }
 
-func transferOwnership(owner crypto.Client, ownerCert crypto.CertificateHandler, asset string, newOwnerCert crypto.CertificateHandler) error {
+func fetchBlacklist(client crypto.Client, orgName string, args []string) error {
+	chaincodeInput := &pb.ChaincodeInput{Function: "fetch", Args: args}
+
+	// Prepare spec and submit
+	spec := &pb.ChaincodeSpec{
+		Type:                 1,
+		ChaincodeID:          &pb.ChaincodeID{Name: "mycc"},
+		CtorMsg:              chaincodeInput,
+		Metadata:             []byte(orgName),
+		ConfidentialityLevel: pb.ConfidentialityLevel_PUBLIC,
+	}
+
+	var ctx = context.Background()
+	chaincodeInvocationSpec := &pb.ChaincodeInvocationSpec{ChaincodeSpec: spec}
+
+	tid := chaincodeInvocationSpec.ChaincodeSpec.ChaincodeID.Name
+
+	// Now create the Transactions message and send to Peer.
+	transaction, err := client.NewChaincodeQuery(chaincodeInvocationSpec, tid)
+	if err != nil {
+		return fmt.Errorf("Error new transaction: %s ", err)
+	}
+
+	ledger, err := ledger.GetLedger()
+	ledger.BeginTxBatch("1")
+	valBytes, _, err := chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), transaction)
+	if err != nil {
+		return fmt.Errorf("Error query chaincode: %s", err)
+	}
+	ledger.CommitTxBatch("1", []*pb.Transaction{transaction}, nil, nil)
+
+	fmt.Printf("Query chaincode result: %s\n", string(valBytes))
+
+	return err
+}
+
+func account(client crypto.Client, orgName string, args []string) error {
 	// Get a transaction handler to be used to submit the execute transaction
 	// and bind the chaincode access control logic using the binding
-
-	submittingCertHandler, err := owner.GetTCertificateHandlerNext("role", "account")
+	submittingCertHandler, err := client.GetTCertificateHandlerNext("role")
 	if err != nil {
 		return err
 	}
@@ -270,14 +311,14 @@ func transferOwnership(owner crypto.Client, ownerCert crypto.CertificateHandler,
 		return err
 	}
 
-	newOwner := base64.StdEncoding.EncodeToString(newOwnerCert.GetCertificate())
-	chaincodeInput := &pb.ChaincodeInput{Function: "transfer", Args: []string{asset, newOwner}}
+	chaincodeInput := &pb.ChaincodeInput{Function: "account", Args: args}
 
 	// Prepare spec and submit
 	spec := &pb.ChaincodeSpec{
 		Type:                 1,
 		ChaincodeID:          &pb.ChaincodeID{Name: "mycc"},
 		CtorMsg:              chaincodeInput,
+		Metadata:             []byte(orgName),
 		ConfidentialityLevel: pb.ConfidentialityLevel_PUBLIC,
 	}
 
@@ -287,54 +328,22 @@ func transferOwnership(owner crypto.Client, ownerCert crypto.CertificateHandler,
 	tid := chaincodeInvocationSpec.ChaincodeSpec.ChaincodeID.Name
 
 	// Now create the Transactions message and send to Peer.
-	transaction, err := txHandler.NewChaincodeExecute(chaincodeInvocationSpec, tid)
+	transaction, err := txHandler.NewChaincodeQuery(chaincodeInvocationSpec, tid)
 	if err != nil {
-		return fmt.Errorf("Error deploying chaincode: %s ", err)
+		return fmt.Errorf("Error new transaction: %s ", err)
 	}
 
 	ledger, err := ledger.GetLedger()
 	ledger.BeginTxBatch("1")
-	_, _, err = chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), transaction)
+	valBytes, _, err := chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), transaction)
 	if err != nil {
-		return fmt.Errorf("Error deploying chaincode: %s", err)
+		return fmt.Errorf("Error query chaincode: %s", err)
 	}
 	ledger.CommitTxBatch("1", []*pb.Transaction{transaction}, nil, nil)
+
+	fmt.Printf("Query chaincode result: %s\n", string(valBytes))
 
 	return err
-
-}
-
-func whoIsTheOwner(asset string) ([]byte, error) {
-	chaincodeInput := &pb.ChaincodeInput{Function: "query", Args: []string{asset}}
-
-	// Prepare spec and submit
-	spec := &pb.ChaincodeSpec{
-		Type:                 1,
-		ChaincodeID:          &pb.ChaincodeID{Name: "mycc"},
-		CtorMsg:              chaincodeInput,
-		ConfidentialityLevel: pb.ConfidentialityLevel_PUBLIC,
-	}
-
-	var ctx = context.Background()
-	chaincodeInvocationSpec := &pb.ChaincodeInvocationSpec{ChaincodeSpec: spec}
-
-	tid := chaincodeInvocationSpec.ChaincodeSpec.ChaincodeID.Name
-
-	// Now create the Transactions message and send to Peer.
-	transaction, err := administrator.NewChaincodeQuery(chaincodeInvocationSpec, tid)
-	if err != nil {
-		return nil, fmt.Errorf("Error deploying chaincode: %s ", err)
-	}
-
-	ledger, err := ledger.GetLedger()
-	ledger.BeginTxBatch("1")
-	result, _, err := chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), transaction)
-	if err != nil {
-		return nil, fmt.Errorf("Error deploying chaincode: %s", err)
-	}
-	ledger.CommitTxBatch("1", []*pb.Transaction{transaction}, nil, nil)
-
-	return result, err
 }
 
 func setup() {
@@ -488,28 +497,28 @@ func initClients() error {
 	}
 
 	// idc_user
-	if err := crypto.RegisterClient("idc_user", nil, "idc_user", "YP9tanj2taQf"); err != nil {
+	if err := crypto.RegisterClient("idcUser", nil, "idcUser", "6avZQLwcUe9b"); err != nil {
 		return err
 	}
-	idc_user, err = crypto.InitClient("idc_user", nil)
+	idcUser, err = crypto.InitClient("idcUser", nil)
 	if err != nil {
 		return err
 	}
 
 	// credit_user
-	if err := crypto.RegisterClient("credit_user", nil, "credit_user", "DRJ23pEQl16a"); err != nil {
+	if err := crypto.RegisterClient("creditUser", nil, "creditUser", "DRJ23pEQl16a"); err != nil {
 		return err
 	}
-	credit_user, err = crypto.InitClient("credit_user", nil)
+	creditUser, err = crypto.InitClient("creditUser", nil)
 	if err != nil {
 		return err
 	}
 
 	// microloan_user
-	if err := crypto.RegisterClient("microloan_user", nil, "microloan_user", "NPKYL39uKbkj"); err != nil {
+	if err := crypto.RegisterClient("microloanUser", nil, "microloanUser", "NPKYL39uKbkj"); err != nil {
 		return err
 	}
-	microloan_user, err = crypto.InitClient("microloan_user", nil)
+	microloanUser, err = crypto.InitClient("microloanUser", nil)
 	if err != nil {
 		return err
 	}
