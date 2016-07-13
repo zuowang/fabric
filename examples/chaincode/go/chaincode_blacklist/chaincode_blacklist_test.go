@@ -88,8 +88,8 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	fmt.Println("Wait for 5 secs for chaincode to be started")
-	time.Sleep(5 * time.Second)
+	fmt.Println("Wait for 2 secs for chaincode to be started")
+	time.Sleep(2 * time.Second)
 
 	ret := m.Run()
 
@@ -111,23 +111,50 @@ func TestBlacklist(t *testing.T) {
 	}
 
 	// idcUser upload a blacklist
-	if err := uploadBlacklist(idcUser, "idc", []string{"user1", "2016-07-12 16:37:21,2016-07-12", "user2", "2016-07-12 16:37:21,2016-07-12", "user3", "2016-07-12 16:37:21,2016-07-12"}); err != nil {
+	if err := uploadBlacklist(idcUser, "idc", []string{"user1", "user1,2016-07-12 16:37:21,2016-07-12", "user2", "user2,2016-07-12 16:37:21,2016-07-12", "user3", "user3,2016-07-12 16:37:21,2016-07-12"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// microloanUser upload a blacklist
+	if err := uploadBlacklist(microloanUser, "microloan", []string{"user1", "user1,2016-07-12 16:37:21,2016-07-12", "user4", "user4,2016-07-12 16:37:21,2016-07-12", "user5", "user5,2016-07-12 16:37:21,2016-07-12"}); err != nil {
 		t.Fatal(err)
 	}
 
 	fmt.Println("uploadBlacklist")
 
-	if err := fetchBlacklist(idcUser, "idc", []string{"user1"}); err != nil {
+	blacklistBytes, err := fetchBlacklist(idcUser, "idc", []string{"user1"})
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	fmt.Println("fetchBlacklist")
 
-	if err := account(idcUser, "idc", []string{}); err != nil {
+	idcAccountBytes, err := account(idcUser, "idc", []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	microloanAccountBytes, err := account(idcUser, "microloan", []string{})
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	fmt.Println("account")
+
+	// idcUser delete user1 from blacklist
+	if err := deleteBlacklist(microloanUser, "microloan", []string{"user1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	blacklistBytes2, err := fetchBlacklist(idcUser, "idc", []string{"user1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Printf("Query blacklist: %s\n", string(blacklistBytes))
+	fmt.Printf("Query account: %s\n", string(idcAccountBytes))
+	fmt.Printf("Query account: %s\n", string(microloanAccountBytes))
+	fmt.Printf("Query blacklist: %s\n", string(blacklistBytes2))
 	//// This must succeed
 	//if err := assignOwnership(administrator, "Picasso", aliceCert); err != nil {
 	//	t.Fatal(err)
@@ -263,7 +290,18 @@ func uploadBlacklist(client crypto.Client, orgName string, args []string) error 
 	return err
 }
 
-func fetchBlacklist(client crypto.Client, orgName string, args []string) error {
+func fetchBlacklist(client crypto.Client, orgName string, args []string) ([]byte, error) {
+	// Get a transaction handler to be used to submit the execute transaction
+	// and bind the chaincode access control logic using the binding
+	submittingCertHandler, err := client.GetTCertificateHandlerNext("role")
+	if err != nil {
+		return nil, err
+	}
+	txHandler, err := submittingCertHandler.GetTransactionHandler()
+	if err != nil {
+		return nil, err
+	}
+
 	chaincodeInput := &pb.ChaincodeInput{Function: "fetch", Args: args}
 
 	// Prepare spec and submit
@@ -281,34 +319,32 @@ func fetchBlacklist(client crypto.Client, orgName string, args []string) error {
 	tid := chaincodeInvocationSpec.ChaincodeSpec.ChaincodeID.Name
 
 	// Now create the Transactions message and send to Peer.
-	transaction, err := client.NewChaincodeQuery(chaincodeInvocationSpec, tid)
+	transaction, err := txHandler.NewChaincodeQuery(chaincodeInvocationSpec, tid)
 	if err != nil {
-		return fmt.Errorf("Error new transaction: %s ", err)
+		return nil, fmt.Errorf("Error new transaction: %s ", err)
 	}
 
 	ledger, err := ledger.GetLedger()
 	ledger.BeginTxBatch("1")
 	valBytes, _, err := chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), transaction)
 	if err != nil {
-		return fmt.Errorf("Error query chaincode: %s", err)
+		return nil, fmt.Errorf("Error query chaincode: %s", err)
 	}
 	ledger.CommitTxBatch("1", []*pb.Transaction{transaction}, nil, nil)
 
-	fmt.Printf("Query chaincode result: %s\n", string(valBytes))
-
-	return err
+	return valBytes, err
 }
 
-func account(client crypto.Client, orgName string, args []string) error {
+func account(client crypto.Client, orgName string, args []string) ([]byte, error) {
 	// Get a transaction handler to be used to submit the execute transaction
 	// and bind the chaincode access control logic using the binding
 	submittingCertHandler, err := client.GetTCertificateHandlerNext("role")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	txHandler, err := submittingCertHandler.GetTransactionHandler()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	chaincodeInput := &pb.ChaincodeInput{Function: "account", Args: args}
@@ -330,18 +366,61 @@ func account(client crypto.Client, orgName string, args []string) error {
 	// Now create the Transactions message and send to Peer.
 	transaction, err := txHandler.NewChaincodeQuery(chaincodeInvocationSpec, tid)
 	if err != nil {
-		return fmt.Errorf("Error new transaction: %s ", err)
+		return nil, fmt.Errorf("Error new transaction: %s ", err)
 	}
 
 	ledger, err := ledger.GetLedger()
 	ledger.BeginTxBatch("1")
 	valBytes, _, err := chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), transaction)
 	if err != nil {
-		return fmt.Errorf("Error query chaincode: %s", err)
+		return nil, fmt.Errorf("Error query chaincode: %s", err)
 	}
 	ledger.CommitTxBatch("1", []*pb.Transaction{transaction}, nil, nil)
 
-	fmt.Printf("Query chaincode result: %s\n", string(valBytes))
+	return valBytes, err
+}
+
+func deleteBlacklist(client crypto.Client, orgName string, args []string) error {
+	// Get a transaction handler to be used to submit the execute transaction
+	// and bind the chaincode access control logic using the binding
+	submittingCertHandler, err := client.GetTCertificateHandlerNext("role")
+	if err != nil {
+		return err
+	}
+	txHandler, err := submittingCertHandler.GetTransactionHandler()
+	if err != nil {
+		return err
+	}
+
+	chaincodeInput := &pb.ChaincodeInput{Function: "delete", Args: args}
+
+	// Prepare spec and submit
+	spec := &pb.ChaincodeSpec{
+		Type:                 1,
+		ChaincodeID:          &pb.ChaincodeID{Name: "mycc"},
+		CtorMsg:              chaincodeInput,
+		Metadata:             []byte(orgName),
+		ConfidentialityLevel: pb.ConfidentialityLevel_PUBLIC,
+	}
+
+	var ctx = context.Background()
+	chaincodeInvocationSpec := &pb.ChaincodeInvocationSpec{ChaincodeSpec: spec}
+
+	tid := chaincodeInvocationSpec.ChaincodeSpec.ChaincodeID.Name
+
+	// Now create the Transactions message and send to Peer.
+	transaction, err := txHandler.NewChaincodeExecute(chaincodeInvocationSpec, tid)
+	if err != nil {
+		return fmt.Errorf("Error new transaction: %s ", err)
+	}
+
+	ledger, err := ledger.GetLedger()
+	ledger.BeginTxBatch("1")
+	_, _, err = chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), transaction)
+	if err != nil {
+		return fmt.Errorf("Error invoking chaincode: %s", err)
+	}
+	ledger.CommitTxBatch("1", []*pb.Transaction{transaction}, nil, nil)
 
 	return err
 }
