@@ -111,18 +111,18 @@ func TestBlacklist(t *testing.T) {
 	}
 
 	// idcUser upload a blacklist
-	if err := uploadBlacklist(idcUser, "idc", []string{"user1", "user1,2016-07-12 16:37:21,2016-07-12", "user2", "user2,2016-07-12 16:37:21,2016-07-12", "user3", "user3,2016-07-12 16:37:21,2016-07-12"}); err != nil {
+	if err := uploadBlacklist(idcUser, "idc", []string{"370284197901130819", "2016-07-12 16:37:21,2016-07-12", "210905197807210546", "2016-07-12 16:37:21,2016-07-12", "370205197405213513", "2016-07-12 16:37:21,2016-07-12"}); err != nil {
 		t.Fatal(err)
 	}
 
 	// microloanUser upload a blacklist
-	if err := uploadBlacklist(microloanUser, "microloan", []string{"user1", "user1,2016-07-12 16:37:21,2016-07-12", "user4", "user4,2016-07-12 16:37:21,2016-07-12", "user5", "user5,2016-07-12 16:37:21,2016-07-12"}); err != nil {
+	if err := uploadBlacklist(microloanUser, "microloan", []string{"370284197901130819", "2016-07-12 16:37:21,2016-07-12", "372922198012224773", "2016-07-12 16:37:21,2016-07-12", "230803197906010035", "2016-07-12 16:37:21,2016-07-12"}); err != nil {
 		t.Fatal(err)
 	}
 
 	fmt.Println("uploadBlacklist")
 
-	blacklistBytes, err := fetchBlacklist(idcUser, "idc", []string{"user1"})
+	blacklistBytes, err := fetchBlacklist(idcUser, "idc", []string{"370284197901130819"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,73 +141,26 @@ func TestBlacklist(t *testing.T) {
 
 	fmt.Println("account")
 
-	// idcUser delete user1 from blacklist
-	if err := deleteBlacklist(microloanUser, "microloan", []string{"user1"}); err != nil {
+	// idcUser delete 370284197901130819 from blacklist
+	if err := deleteBlacklist(microloanUser, "microloan", []string{"370284197901130819"}); err != nil {
 		t.Fatal(err)
 	}
 
-	blacklistBytes2, err := fetchBlacklist(idcUser, "idc", []string{"user1"})
+	blacklistBytes2, err := fetchBlacklist(idcUser, "idc", []string{"370284197901130819"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fmt.Printf("Query blacklist: %s\n", string(blacklistBytes))
+	blacklistBytes3, err := readBlacklist(idcUser, "idc", []string{"370284197901130819"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Printf("Fetch blacklist: %s\n", string(blacklistBytes))
 	fmt.Printf("Query account: %s\n", string(idcAccountBytes))
 	fmt.Printf("Query account: %s\n", string(microloanAccountBytes))
-	fmt.Printf("Query blacklist: %s\n", string(blacklistBytes2))
-	//// This must succeed
-	//if err := assignOwnership(administrator, "Picasso", aliceCert); err != nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//// Check who is the owner of the Picasso
-	//theOnwerIs, err := whoIsTheOwner("Picasso")
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//aliceAccount, err := attr.GetValueFrom("account", aliceCert.GetCertificate())
-	//if !reflect.DeepEqual(theOnwerIs, aliceAccount) {
-	//	fmt.Printf("%v --- %v", string(theOnwerIs), string(aliceAccount))
-	//	t.Fatal("Alice is not the owner of Picasso")
-	//}
-	//
-	//// Alice transfers ownership of Picasso to Bob
-	//bobCert, err := bob.GetTCertificateHandlerNext("role", "account")
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//// This must fail
-	//if err := transferOwnership(bob, bobCert, "Picasso", adminCert); err == nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//// This must succeed
-	//if err := transferOwnership(alice, aliceCert, "Picasso", bobCert); err != nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//// Check who is the owner of the Picasso
-	//theOnwerIs, err = whoIsTheOwner("Picasso")
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//bobAccount, err := attr.GetValueFrom("account", bobCert.GetCertificate())
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//if !reflect.DeepEqual(theOnwerIs, bobAccount) {
-	//	t.Fatal("Bob is not the owner of Picasso")
-	//}
-	//
-	//// Check who is the owner of an asset that doesn't exist
-	//_, err = whoIsTheOwner("Klee")
-	//if err == nil {
-	//	t.Fatal("This asset doesn't exist. Querying should fail.")
-	//}
+	fmt.Printf("Fetch blacklist: %s\n", string(blacklistBytes2))
+	fmt.Printf("Read blacklist: %s\n", string(blacklistBytes3))
 }
 
 func deploy(admCert crypto.CertificateHandler,args []string) error {
@@ -423,6 +376,51 @@ func deleteBlacklist(client crypto.Client, orgName string, args []string) error 
 	ledger.CommitTxBatch("1", []*pb.Transaction{transaction}, nil, nil)
 
 	return err
+}
+
+func readBlacklist(client crypto.Client, orgName string, args []string) ([]byte, error) {
+	// Get a transaction handler to be used to submit the execute transaction
+	// and bind the chaincode access control logic using the binding
+	submittingCertHandler, err := client.GetTCertificateHandlerNext("role")
+	if err != nil {
+		return nil, err
+	}
+	txHandler, err := submittingCertHandler.GetTransactionHandler()
+	if err != nil {
+		return nil, err
+	}
+
+	chaincodeInput := &pb.ChaincodeInput{Function: "read", Args: args}
+
+	// Prepare spec and submit
+	spec := &pb.ChaincodeSpec{
+		Type:                 1,
+		ChaincodeID:          &pb.ChaincodeID{Name: "mycc"},
+		CtorMsg:              chaincodeInput,
+		Metadata:             []byte(orgName),
+		ConfidentialityLevel: pb.ConfidentialityLevel_PUBLIC,
+	}
+
+	var ctx = context.Background()
+	chaincodeInvocationSpec := &pb.ChaincodeInvocationSpec{ChaincodeSpec: spec}
+
+	tid := chaincodeInvocationSpec.ChaincodeSpec.ChaincodeID.Name
+
+	// Now create the Transactions message and send to Peer.
+	transaction, err := txHandler.NewChaincodeExecute(chaincodeInvocationSpec, tid)
+	if err != nil {
+		return nil, fmt.Errorf("Error new transaction: %s ", err)
+	}
+
+	ledger, err := ledger.GetLedger()
+	ledger.BeginTxBatch("1")
+	valBytes, _, err := chaincode.Execute(ctx, chaincode.GetChain(chaincode.DefaultChain), transaction)
+	if err != nil {
+		return nil, fmt.Errorf("Error invoking chaincode: %s", err)
+	}
+	ledger.CommitTxBatch("1", []*pb.Transaction{transaction}, nil, nil)
+
+	return valBytes, err
 }
 
 func setup() {

@@ -27,7 +27,6 @@ import (
 	"errors"
 
 	"strconv"
-	"strings"
 	"bytes"
 )
 
@@ -223,34 +222,40 @@ func (t *BlacklistChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]by
 	}
 	OrganizationId := string(OrganizationIdAsbytes)
 
-	iter, err := stub.RangeQueryState(UserId+"1", UserId+":")
+	iter, err := stub.RangeQueryState(UserId+"$", UserId+"~")
 	if err != nil {
 		return nil, fmt.Errorf("Error fetching blacklist: [%v]", err)
 	}
 	defer iter.Close()
 
+	var buffer bytes.Buffer
+	if !iter.HasNext() {
+		return nil, fmt.Errorf("Fetch nil for user: [%v]", UserId)
+	}
+
+	OldReadsAsbytes, err := stub.GetState(ReadsPrefix + OrganizationId)
+	if err != nil {
+		return nil, err
+	}
+	OldReads, err := strconv.Atoi(string(OldReadsAsbytes))
+	if err != nil {
+		return nil, err
+	}
+
 	for iter.HasNext() {
-		_, valBytes, err := iter.Next()
+		keyStr, valBytes, err := iter.Next()
 		if err != nil {
 			return nil, err
 		}
-		val := strings.Split(string(valBytes), ",")
-		// Read counter plus one if read other's blacklist
-		if (val[1] != OrganizationId) {
-			OldReadsAsbytes, err := stub.GetState(ReadsPrefix + OrganizationId)
-			if err != nil {
-				return nil, err
-			}
-			OldReads, err := strconv.Atoi(string(OldReadsAsbytes))
-			if err != nil {
-				return nil, err
-			}
-			err = stub.PutState(OrganizationId, []byte(strconv.Itoa(OldReads + 1)))
-			if err != nil {
-				return nil, err
-			}
+		buffer.Write(valBytes)
+		buffer.WriteString("|")
 
-			OldSharesAsbytes, err := stub.GetState(SharesPrefix + val[1])
+		val := keyStr[18:]
+		// Read counter plus one if read other's blacklist
+		if (val != OrganizationId) {
+			OldReads++
+
+			OldSharesAsbytes, err := stub.GetState(SharesPrefix + val)
 			if err != nil {
 				return nil, err
 			}
@@ -258,12 +263,12 @@ func (t *BlacklistChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]by
 			if err != nil {
 				return nil, err
 			}
-			err = stub.PutState(SharesPrefix + val[1], []byte(strconv.Itoa(OldShares + 1)))
+			err = stub.PutState(SharesPrefix + val, []byte(strconv.Itoa(OldShares + 1)))
 			if err != nil {
 				return nil, err
 			}
 
-			OldSharesAsbytes, err = stub.GetState(UserId + SharesMiddle + val[1])
+			OldSharesAsbytes, err = stub.GetState(UserId + SharesMiddle + val)
 			if err != nil {
 				return nil, err
 			}
@@ -271,14 +276,19 @@ func (t *BlacklistChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]by
 			if err != nil {
 				return nil, err
 			}
-			err = stub.PutState(UserId + SharesMiddle + val[1], []byte(strconv.Itoa(OldShares + 1)))
+			err = stub.PutState(UserId + SharesMiddle + val, []byte(strconv.Itoa(OldShares + 1)))
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	return nil, nil
+	err = stub.PutState(OrganizationId, []byte(strconv.Itoa(OldReads)))
+	if err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
 }
 
 func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
