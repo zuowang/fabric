@@ -226,8 +226,9 @@ func uploadBlacklist(client crypto.Client, orgName string, args []string) error 
 
 	tid := chaincodeInvocationSpec.ChaincodeSpec.ChaincodeID.Name
 
+
 	// Now create the Transactions message and send to Peer.
-	transaction, err := txHandler.NewChaincodeExecute(chaincodeInvocationSpec, tid)
+	transaction, err := txHandler.NewChaincodeExecute(chaincodeInvocationSpec, tid)//client.NewChaincodeExecute(chaincodeInvocationSpec, tid, []string{"role"}...) //
 	if err != nil {
 		return fmt.Errorf("Error new transaction: %s ", err)
 	}
