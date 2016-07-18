@@ -99,7 +99,43 @@ func TestMain(m *testing.M) {
 	os.Exit(ret)
 }
 
-func TestBlacklist(t *testing.T) {
+func TestFreeFetch(t *testing.T) {
+	// Administrator deploy the chaicode
+	adminCert, err := administrator.GetTCertificateHandlerNext("role")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := deploy(adminCert, []string{"idc", "microloan", "credit"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// idcUser upload a blacklist
+	if err := uploadBlacklist(idcUser, "idc", []string{"370284197901130819", "2016-07-12 16:37:21,2016-07-12", "210905197807210546", "2016-07-12 16:37:21,2016-07-12", "370205197405213513", "2016-07-12 16:37:21,2016-07-12"}); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("uploadBlacklist")
+
+	blacklistBytes, err := fetchBlacklist(idcUser, "idc", []string{"370284197901130819"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("fetchBlacklist")
+
+	idcAccountBytes, err := account(idcUser, "idc", []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("account")
+
+	fmt.Printf("Fetch blacklist: %s\n", string(blacklistBytes))
+	fmt.Printf("Query account: %s\n", string(idcAccountBytes))
+}
+
+func TestMultiItem(t *testing.T) {
 	// Administrator deploy the chaicode
 	adminCert, err := administrator.GetTCertificateHandlerNext("role")
 	if err != nil {
@@ -134,7 +170,43 @@ func TestBlacklist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	microloanAccountBytes, err := account(idcUser, "microloan", []string{})
+	fmt.Println("account")
+
+	fmt.Printf("Fetch blacklist: %s\n", string(blacklistBytes))
+	fmt.Printf("Query account: %s\n", string(idcAccountBytes))
+}
+
+func TestDeleteItem(t *testing.T) {
+	// Administrator deploy the chaicode
+	adminCert, err := administrator.GetTCertificateHandlerNext("role")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := deploy(adminCert, []string{"idc", "microloan", "credit"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// idcUser upload a blacklist
+	if err := uploadBlacklist(idcUser, "idc", []string{"370284197901130819", "2016-07-12 16:37:21,2016-07-12", "210905197807210546", "2016-07-12 16:37:21,2016-07-12", "370205197405213513", "2016-07-12 16:37:21,2016-07-12"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// microloanUser upload a blacklist
+	if err := uploadBlacklist(microloanUser, "microloan", []string{"370284197901130819", "2016-07-12 16:37:21,2016-07-12", "372922198012224773", "2016-07-12 16:37:21,2016-07-12", "230803197906010035", "2016-07-12 16:37:21,2016-07-12"}); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("uploadBlacklist")
+
+	blacklistBytes, err := fetchBlacklist(idcUser, "idc", []string{"370284197901130819"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("fetchBlacklist")
+
+	idcAccountBytes, err := account(idcUser, "idc", []string{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,16 +223,48 @@ func TestBlacklist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blacklistBytes3, err := readBlacklist(idcUser, "idc", []string{"370284197901130819"})
+	fmt.Printf("Fetch blacklist: %s\n", string(blacklistBytes))
+	fmt.Printf("Query account: %s\n", string(idcAccountBytes))
+	fmt.Printf("Fetch blacklist: %s\n", string(blacklistBytes2))
+}
+
+func TestPayPerQuery(t *testing.T) {
+	// Administrator deploy the chaicode
+	adminCert, err := administrator.GetTCertificateHandlerNext("role")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fmt.Printf("Fetch blacklist: %s\n", string(blacklistBytes))
+	if err := deploy(adminCert, []string{"idc", "microloan", "credit"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// idcUser upload a blacklist
+	if err := uploadBlacklist(idcUser, "idc", []string{"370284197901130819", "2016-07-12 16:37:21,2016-07-12", "210905197807210546", "2016-07-12 16:37:21,2016-07-12", "370205197405213513", "2016-07-12 16:37:21,2016-07-12"}); err != nil {
+		t.Fatal(err)
+	}
+
+	// microloanUser upload a blacklist
+	if err := uploadBlacklist(microloanUser, "microloan", []string{"370284197901130819", "2016-07-12 16:37:21,2016-07-12", "372922198012224773", "2016-07-12 16:37:21,2016-07-12", "230803197906010035", "2016-07-12 16:37:21,2016-07-12"}); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("uploadBlacklist")
+
+	idcAccountBytes, err := account(idcUser, "idc", []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println("account")
+
+	blacklistBytes, err := readBlacklist(idcUser, "idc", []string{"370284197901130819"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	fmt.Printf("Query account: %s\n", string(idcAccountBytes))
-	fmt.Printf("Query account: %s\n", string(microloanAccountBytes))
-	fmt.Printf("Fetch blacklist: %s\n", string(blacklistBytes2))
-	fmt.Printf("Read blacklist: %s\n", string(blacklistBytes3))
+	fmt.Printf("Read blacklist: %s\n", string(blacklistBytes))
 }
 
 func TestLease(t *testing.T) {
