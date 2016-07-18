@@ -28,6 +28,7 @@ import (
 
 	"strconv"
 	"bytes"
+	"time"
 )
 
 var chaincodeLogger = logging.MustGetLogger("blacklist")
@@ -40,6 +41,7 @@ var WritesPrefix = "#w"
 var ReadsPrefix = "#r"
 var SharesPrefix = "#s"
 var CreditsPrefix = "#c"
+var LeaseStartPrefix = "#ls"
 var SharesMiddle = "#"
 
 func (t *BlacklistChaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
@@ -87,6 +89,8 @@ func (t *BlacklistChaincode) Invoke(stub *shim.ChaincodeStub, function string, a
 		return t.Delete(stub, args)
 	} else if function == "read" {
 		return t.Read(stub, args)
+	} else if function == "lease" {
+		return t.Lease(stub, args)
 	}
 
 	return nil, errors.New("Received unknown function invocation")
@@ -291,6 +295,37 @@ func (t *BlacklistChaincode) Read(stub *shim.ChaincodeStub, args []string) ([]by
 	return buffer.Bytes(), nil
 }
 
+func (t *BlacklistChaincode) Lease(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+	if len(args) != 0 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 0")
+	}
+
+	callerRole, err := stub.ReadCertAttribute("role")
+	if err != nil {
+		chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
+		return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
+	}
+
+	caller := string(callerRole)
+	if (caller != "Organization") {
+		chaincodeLogger.Errorf("Failed validating caller role")
+		return nil, fmt.Errorf("Failed validating caller role.")
+	}
+
+	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
+	if err != nil {
+		return nil, errors.New("Failed getting metadata")
+	}
+	OrganizationId := string(OrganizationIdAsbytes)
+
+	err = stub.PutState(LeaseStartPrefix + OrganizationId, []byte(time.Now().Format("2006-01-02 15:04:05")))
+	if err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
 func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
 	callerRole, err := stub.ReadCertAttribute("role")
 	if err != nil {
@@ -308,6 +343,8 @@ func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, ar
 		return t.Fetch(stub, args)
 	} else if function == "account" {
 		return t.Account(stub, args)
+	} else if function == "fetch2" {
+		return t.Fetch2(stub, args)
 	}
 
 	return nil, errors.New("Received unknown function invocation")
@@ -348,6 +385,56 @@ func (t *BlacklistChaincode) Fetch(stub *shim.ChaincodeStub, args []string) ([]b
 	//if err != nil {
 	//	return nil, err
 	//}
+	return buffer.Bytes(), nil
+}
+
+func (t *BlacklistChaincode) Fetch2(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
+	if len(args) != 1 {
+		return nil, errors.New("Incorrect number of arguments. Expecting 1")
+	}
+
+	UserId := args[0]
+
+	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
+	if err != nil {
+		return nil, errors.New("Failed getting metadata")
+	}
+	OrganizationId := string(OrganizationIdAsbytes)
+
+	timeAsBytes, err := stub.GetState(LeaseStartPrefix + OrganizationId)
+	if err != nil {
+		return nil, errors.New("Failed getting lease start time")
+	}
+
+	leaseStartTime, err := time.Parse("2006-01-02 15:04:05", string(timeAsBytes))
+	if err != nil {
+		return nil, errors.New("Time conversion error")
+	}
+
+	// change to 5 seconds for test
+	//if time.Now().Sub(leaseStartTime).Seconds() > 5 {
+	//	return nil, errors.New("Lease expire error")
+	//}
+	if time.Now().Sub(leaseStartTime).Minutes() > 30 {
+		return nil, errors.New("Lease expire error")
+	}
+
+	var buffer bytes.Buffer
+	iter, err := stub.RangeQueryState(UserId + "$", UserId + "~")
+	if err != nil {
+		return nil, fmt.Errorf("Error fetching blacklist: [%v]", err)
+	}
+	defer iter.Close()
+
+	for iter.HasNext() {
+		_, valBytes, err := iter.Next()
+		if err != nil {
+			return nil, err
+		}
+		buffer.Write(valBytes)
+		buffer.WriteString("|")
+	}
+
 	return buffer.Bytes(), nil
 }
 
