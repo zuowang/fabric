@@ -42,7 +42,6 @@ var ReadsPrefix = "#r"
 var SharesPrefix = "#s"
 var CreditsPrefix = "#c"
 var LeaseStartPrefix = "#ls"
-var LeaseEndPrefix = "#ls"
 var SharesMiddle = "#"
 
 func (t *BlacklistChaincode) Init(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
@@ -92,8 +91,6 @@ func (t *BlacklistChaincode) Invoke(stub *shim.ChaincodeStub, function string, a
 		return t.Read(stub, args)
 	} else if function == "lease" {
 		return t.Lease(stub, args)
-	} else if function == "lease2" {
-		return t.Lease2(stub, args)
 	}
 
 	return nil, errors.New("Received unknown function invocation")
@@ -329,56 +326,6 @@ func (t *BlacklistChaincode) Lease(stub *shim.ChaincodeStub, args []string) ([]b
 	return nil, nil
 }
 
-func (t *BlacklistChaincode) Lease2(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-	if len(args) != 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 1")
-	}
-
-	callerRole, err := stub.ReadCertAttribute("role")
-	if err != nil {
-		chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
-		return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
-	}
-
-	caller := string(callerRole)
-	if (caller != "Organization") {
-		chaincodeLogger.Errorf("Failed validating caller role")
-		return nil, fmt.Errorf("Failed validating caller role.")
-	}
-
-	secondStr := args[0]
-	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
-	if err != nil {
-		return nil, errors.New("Failed getting metadata")
-	}
-	OrganizationId := string(OrganizationIdAsbytes)
-
-	seconds, err := strconv.Atoi(secondStr)
-	if err != nil {
-		return nil, err
-	}
-
-	lease := time.Duration(seconds) * time.Second
-	leaseEndtime := time.Now().Add(lease)
-	err = stub.PutState(LeaseEndPrefix + OrganizationId, []byte(leaseEndtime.Format("2006-01-02 15:04:05")))
-	if err != nil {
-		return nil, err
-	}
-
-	// Initiate Timer for the duration of the lease
-	go func(stub *shim.ChaincodeStub, OrganizationId string, sleeptime time.Duration) ([]byte, error) {
-		fmt.Println("Lease2: Sleeping for ", sleeptime)
-		//time.Sleep(sleeptime)
-		err := stub.DelState(LeaseEndPrefix + OrganizationId)
-		if err != nil {
-			fmt.Println("Del State Fail===========================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================%v", err)
-			return nil, err
-		}
-		return nil, nil
-	}(stub, OrganizationId, lease)
-	return nil, nil
-}
-
 func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
 	callerRole, err := stub.ReadCertAttribute("role")
 	if err != nil {
@@ -398,8 +345,6 @@ func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, ar
 		return t.Account(stub, args)
 	} else if function == "fetch2" {
 		return t.Fetch2(stub, args)
-	} else if function == "fetch3" {
-		return t.Fetch3(stub, args)
 	}
 
 	return nil, errors.New("Received unknown function invocation")
@@ -474,43 +419,6 @@ func (t *BlacklistChaincode) Fetch2(stub *shim.ChaincodeStub, args []string) ([]
 		return nil, errors.New("Lease expire error")
 	}
 
-	var buffer bytes.Buffer
-	iter, err := stub.RangeQueryState(UserId + "$", UserId + "~")
-	if err != nil {
-		return nil, fmt.Errorf("Error fetching blacklist: [%v]", err)
-	}
-	defer iter.Close()
-
-	for iter.HasNext() {
-		_, valBytes, err := iter.Next()
-		if err != nil {
-			return nil, err
-		}
-		buffer.Write(valBytes)
-		buffer.WriteString("|")
-	}
-
-	return buffer.Bytes(), nil
-}
-
-func (t *BlacklistChaincode) Fetch3(stub *shim.ChaincodeStub, args []string) ([]byte, error) {
-	if len(args) != 1 {
-		return nil, errors.New("Incorrect number of arguments. Expecting 1")
-	}
-
-	UserId := args[0]
-
-	OrganizationIdAsbytes, err := stub.GetCallerMetadata()
-	if err != nil {
-		return nil, errors.New("Failed getting metadata")
-	}
-	OrganizationId := string(OrganizationIdAsbytes)
-
-	_, err = stub.GetState(LeaseEndPrefix + OrganizationId)
-	if err != nil {
-		return nil, errors.New("Lease may be expired")
-	}
-	fmt.Println("not expire======================================================================================= %v", LeaseEndPrefix + OrganizationId)
 	var buffer bytes.Buffer
 	iter, err := stub.RangeQueryState(UserId + "$", UserId + "~")
 	if err != nil {
