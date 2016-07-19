@@ -54,17 +54,12 @@ func (t *BlacklistChaincode) Init(stub *shim.ChaincodeStub, function string, arg
 }
 
 func (t *BlacklistChaincode) Invoke(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
-	callerRole, err := stub.ReadCertAttribute("role")
-	if err != nil {
-		chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
-		return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
-	}
-
-	caller := string(callerRole)
-	if (caller != "Organization") {
+	isOk, _ := stub.VerifyAttribute("role", []byte("Organization"))
+	if !isOk {
 		chaincodeLogger.Errorf("Failed validating caller role")
 		return nil, fmt.Errorf("Failed validating caller role.")
 	}
+
 	if function == "write" {
 		return t.Write(stub, args)
 	} else if function == "delete" {
@@ -151,14 +146,8 @@ func (t *BlacklistChaincode) Delete(stub *shim.ChaincodeStub, args []string) ([]
 }
 
 func (t *BlacklistChaincode) Query(stub *shim.ChaincodeStub, function string, args []string) ([]byte, error) {
-	callerRole, err := stub.ReadCertAttribute("role")
-	if err != nil {
-		chaincodeLogger.Errorf("Error reading attribute: [%v]", err)
-		return nil, fmt.Errorf("Failed fetching caller role. Error was [%v]", err)
-	}
-
-	caller := string(callerRole)
-	if (caller != "Organization") {
+	isOk, _ := stub.VerifyAttribute("role", []byte("Organization"))
+	if !isOk {
 		chaincodeLogger.Errorf("Failed validating caller role")
 		return nil, fmt.Errorf("Failed validating caller role.")
 	}
