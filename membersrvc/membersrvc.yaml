@@ -59,6 +59,16 @@ eca:
                   - bank_c
               institutions:
                   - institution_a
+                  - org_0
+                  - org_1
+                  - org_2
+                  - org_3
+                  - org_4
+                  - org_5
+                  - org_6
+                  - org_7
+                  - org_8
+                  - org_9
         users:
                 #
                 # The fields of each user are as follows:
@@ -96,6 +106,17 @@ eca:
                 bob: 1 NOE63pEQbL25 bank_a 00007
                 assigner: 1 Tc43PeqBl11 bank_a 00008
 
+                B003003H8000: 1 B003003H8000 org_0 00009
+                B003003H8001: 1 B003003H8001 org_1 00010
+                B003003H8002: 1 B003003H8002 org_2 00011
+                B003003H8003: 1 B003003H8003 org_3 00012
+                B003003H8004: 1 B003003H8004 org_4 00013
+                B003003H8005: 1 B003003H8005 org_5 00014
+                B003003H8006: 1 B003003H8006 org_6 00015
+                B003003H8007: 1 B003003H8007 org_7 00016
+                B003003H8008: 1 B003003H8008 org_8 00017
+                B003003H8009: 1 B003003H8009 org_9 00018
+
                 vp: 4 f3489fy98ghf
 
                 test_vp0: 4 MwYpmSRjupbT
@@ -108,6 +129,7 @@ eca:
                 test_vp7: 4 twoKZouEyLyB
                 test_vp8: 4 BxP7QNh778gI
                 test_vp9: 4 wu3F1EwJWHvQ
+
 
 # Uncomment this section to activate devnet setup as specficied in
 # devnet-setup.md
@@ -164,9 +186,17 @@ aca:
               attribute-entry-9: bob;bank_a;role;client;2015-02-02T00:00:00-03:00;;
               attribute-entry-10: bob;bank_a;account;23456-67890;2015-02-02T00:00:00-03:00;;
               attribute-entry-11: assigner;bank_a;role;assigner;2015-01-01T00:00:00-03:00;;
-              attribute-entry-12: jim;institution_a;role;Organization;2015-01-01T00:00:00-03:00;;
-              attribute-entry-13: diego;institution_a;role;Organization;2015-01-01T00:00:00-03:00;;
-              attribute-entry-14: binhn,;institution_a;role;Organization;2015-01-01T00:00:00-03:00;;
+
+              attribute-entry-12: B003003H8000;org_0;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-13: B003003H8001;org_1;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-14: B003003H8002;org_2;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-15: B003003H8003;org_3;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-16: B003003H8004;org_4;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-17: B003003H8005;org_5;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-18: B003003H8006;org_6;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-19: B003003H8007;org_7;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-20: B003003H8008;org_8;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-21: B003003H8009;org_9;role;Organization;2015-01-01T00:00:00-03:00;;
 
           address: localhost:50051
           server-name: acap
