@@ -1,3 +1,40 @@
+# modification for blacklist
+#1. add orgnization id
+#                 - org_0
+#                 - org_1
+#                 - org_2
+#                 - org_3
+#                 - org_4
+#                 - org_5
+#                 - org_6
+#                 - org_7
+#                 - org_8
+#                 - org_9
+#2. add user, passwd
+#                B003003H8000: 1 B003003H8000 org_0
+#                B003003H8001: 1 B003003H8001 org_1
+#                B003003H8002: 1 B003003H8002 org_2
+#                B003003H8003: 1 B003003H8003 org_3
+#                B003003H8004: 1 B003003H8004 org_4
+#                B003003H8005: 1 B003003H8005 org_5
+#                B003003H8006: 1 B003003H8006 org_6
+#                B003003H8007: 1 B003003H8007 org_7
+#                B003003H8008: 1 B003003H8008 org_8
+#                B003003H8009: 1 B003003H8009 org_9
+#3. add attributes
+#              attribute-entry-12: B003003H8000;org_0;role;Organization;2015-01-01T00:00:00-03:00;;
+#              attribute-entry-13: B003003H8001;org_1;role;Organization;2015-01-01T00:00:00-03:00;;
+#              attribute-entry-14: B003003H8002;org_2;role;Organization;2015-01-01T00:00:00-03:00;;
+#              attribute-entry-15: B003003H8003;org_3;role;Organization;2015-01-01T00:00:00-03:00;;
+#              attribute-entry-16: B003003H8004;org_4;role;Organization;2015-01-01T00:00:00-03:00;;
+#              attribute-entry-17: B003003H8005;org_5;role;Organization;2015-01-01T00:00:00-03:00;;
+#              attribute-entry-18: B003003H8006;org_6;role;Organization;2015-01-01T00:00:00-03:00;;
+#              attribute-entry-19: B003003H8007;org_7;role;Organization;2015-01-01T00:00:00-03:00;;
+#              attribute-entry-20: B003003H8008;org_8;role;Organization;2015-01-01T00:00:00-03:00;;
+#              attribute-entry-21: B003003H8009;org_9;role;Organization;2015-01-01T00:00:00-03:00;;
+#4. anable aca
+#          enabled: true
+
 # CA server parameters
 #
 server:
@@ -68,6 +105,16 @@ eca:
                   - bank_c
               institutions:
                   - institution_a
+                  - org_0
+                  - org_1
+                  - org_2
+                  - org_3
+                  - org_4
+                  - org_5
+                  - org_6
+                  - org_7
+                  - org_8
+                  - org_9
         users:
                 #
                 # The fields of each user are as follows:
@@ -104,6 +151,17 @@ eca:
                 alice: 1 CMS10pEQlB16 bank_a
                 bob: 1 NOE63pEQbL25 bank_a
                 assigner: 1 Tc43PeqBl11 bank_a
+
+                B003003H8000: 1 B003003H8000 org_0
+                B003003H8001: 1 B003003H8001 org_1
+                B003003H8002: 1 B003003H8002 org_2
+                B003003H8003: 1 B003003H8003 org_3
+                B003003H8004: 1 B003003H8004 org_4
+                B003003H8005: 1 B003003H8005 org_5
+                B003003H8006: 1 B003003H8006 org_6
+                B003003H8007: 1 B003003H8007 org_7
+                B003003H8008: 1 B003003H8008 org_8
+                B003003H8009: 1 B003003H8009 org_9
 
                 vp: 4 f3489fy98ghf
 
@@ -174,10 +232,20 @@ aca:
               attribute-entry-10: bob;bank_a;account;23456-67890;2015-02-02T00:00:00-03:00;;
               attribute-entry-11: assigner;bank_a;role;assigner;2015-01-01T00:00:00-03:00;;
 
+              attribute-entry-12: B003003H8000;org_0;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-13: B003003H8001;org_1;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-14: B003003H8002;org_2;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-15: B003003H8003;org_3;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-16: B003003H8004;org_4;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-17: B003003H8005;org_5;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-18: B003003H8006;org_6;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-19: B003003H8007;org_7;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-20: B003003H8008;org_8;role;Organization;2015-01-01T00:00:00-03:00;;
+              attribute-entry-21: B003003H8009;org_9;role;Organization;2015-01-01T00:00:00-03:00;;
           address: localhost:7054
           server-name: acap
           # Enabling/disabling Attribute Certificate Authority, if ACA is enabled attributes will be added into the TCert.
-          enabled: false
+          enabled: true
 pki:
           ca:
                  subject:
